@@ -9,7 +9,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  devIndicators: false
+  devIndicators: false,
+  basePath: '/pfjc-bi',
 }
 
 export default nextConfig
