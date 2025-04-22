@@ -879,10 +879,12 @@ const SalesReportTable = () => {
       <CardContent className="p-4">
         <div className="w-full relative" style={{ minWidth: "100%" }}>
           <div 
-            className="overflow-auto border rounded-md"
+            className="overflow-auto border rounded-md custom-scrollbar"
             style={{
+              maxHeight: '50vh',
               scrollbarWidth: 'thin',
               scrollbarColor: 'rgba(156, 163, 175, 0.3) transparent',
+              position: 'relative'
             }}
           >
             <style jsx global>{`
@@ -911,7 +913,7 @@ const SalesReportTable = () => {
                   {columns.map(column => (
                     <TableHead 
                       key={column.key} 
-                      className={`whitespace-nowrap text-center ${column.dataIndex === 'select' ? 'p-0' : ''} bg-white`}
+                      className={`whitespace-nowrap text-center ${column.dataIndex === 'select' ? 'p-0' : ''} bg-white sticky top-0`}
                       style={{ 
                         width: column.width,
                         minWidth: column.minWidth
