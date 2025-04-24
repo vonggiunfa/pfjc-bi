@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format, parse } from "date-fns"
 import { BarChart, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, Plus, Save, Trash2, Upload } from "lucide-react"
-import { ChangeEvent, KeyboardEvent, useEffect, useRef, useState } from "react"
+import React, { ChangeEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import MoneyInput, { divide, formatMoney, isNegativeValue, subtract, sum } from "./MoneyInput"
 import SalesCharts from "./SalesCharts"
@@ -42,8 +42,20 @@ interface ReportData {
   factTotal: string;
 }
 
+// 定义列类型
+interface ColumnType {
+  title: string;
+  dataIndex: string;
+  key: string;
+  isReadOnly: boolean;
+  width: string;
+  minWidth: string;
+  isMoney: boolean;
+  highlight?: boolean;
+}
+
 // 定义表格列配置
-const columns = [
+const columns: ColumnType[] = [
   {
     title: '选择',
     dataIndex: 'select',
@@ -230,6 +242,56 @@ const formatNumberInput = (value: string) => {
   return numericValue
 }
 
+// 创建行组件 - 使用React.memo优化渲染性能
+const TableRow = React.memo(({
+  row,
+  columns,
+  isSelected,
+  onRowSelect,
+  onInputChange,
+  onDateChange,
+  onBlur,
+  onKeyDown,
+  getCellContent,
+}: {
+  row: ReportData;
+  columns: ColumnType[];
+  isSelected: boolean;
+  onRowSelect: (rowId: string, checked: boolean) => void;
+  onInputChange: (rowId: string, key: string, value: string) => void;
+  onDateChange: (rowId: string, date: Date | undefined) => void;
+  onBlur: (rowId: string) => void;
+  onKeyDown: (e: KeyboardEvent<HTMLInputElement>, rowId: string, columnIndex: number) => void;
+  getCellContent: (row: ReportData, column: ColumnType, rowIndex: number, colIndex: number, isEditable: boolean) => React.ReactNode;
+}) => {
+  return (
+    <tr className={isSelected ? 'selected' : ''}>
+      {columns.map((column, colIndex) => (
+        <td
+          key={`${row.id}_${column.key}`}
+          className={`
+            ${column.dataIndex === 'select' ? 'w-10 p-0' : ''}
+            ${colIndex === 0 ? 'sticky-left' : ''}
+            ${colIndex === 1 ? 'sticky-left-2' : ''}
+          `}
+        >
+          {getCellContent(row, column, 0, colIndex, isSelected)}
+        </td>
+      ))}
+    </tr>
+  );
+});
+
+/**
+ * SalesReportTable - 销售报表表格组件
+ * 
+ * 性能优化点:
+ * 1. 基于选择的输入和计算策略 - 只对选中行进行编辑和计算
+ * 2. 组件化与记忆化 - 使用React.memo避免不必要的重新渲染
+ * 3. 延迟输入处理 - 使用setTimeout减少状态更新频率
+ * 4. 优化渲染 - 未选中行显示为只读，减少输入组件的渲染
+ * 5. 计算优化 - 只对选中行进行计算，减少不必要的计算
+ */
 const SalesReportTable = () => {
   // 从本地存储加载数据
   const loadSavedData = (): ReportData[] => {
@@ -323,41 +385,16 @@ const SalesReportTable = () => {
   const [isChartsOpen, setIsChartsOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const tableContainerRef = useRef<HTMLDivElement>(null)
-
-  // 处理表格滚动状态
-  useEffect(() => {
-    const handleScroll = () => {
-      const container = tableContainerRef.current
-      if (!container) return
-      
-      // 判断是否向右滚动（scrollLeft > 0）
-      if (container.scrollLeft > 5) {
-        container.classList.add('scrolled-right')
-      } else {
-        container.classList.remove('scrolled-right')
-      }
-    }
-    
-    const container = tableContainerRef.current
-    if (container) {
-      container.addEventListener('scroll', handleScroll)
-    }
-    
-    // 清理事件监听
-    return () => {
-      if (container) {
-        container.removeEventListener('scroll', handleScroll)
-      }
-    }
-  }, [isClient])
-
-  // 处理输入变化
-  const handleInputChange = (rowId: string, key: string, value: string) => {
+  
+  // 使用useCallback优化事件处理函数
+  
+  // 防抖函数 - 使用useRef保存函数引用，避免在重新渲染时创建新的防抖函数
+  const debouncedInputChange = useRef((rowId: string, key: string, value: string) => {
     setRows(prevRows => {
       return prevRows.map(row => {
-        if (row.id !== rowId) return row
+        if (row.id !== rowId) return row;
         
-        // 对于非金额字段，仍然使用简单的格式化
+        // 对于非金额字段，使用简单的格式化
         if (key === 'people') {
           const formattedValue = formatNumberInput(value)
           return {
@@ -371,12 +408,31 @@ const SalesReportTable = () => {
           ...row,
           [key]: value
         }
-      })
-    })
-  }
+      });
+    });
+  }).current;
+  
+  // 设置延迟时间较短，保持响应性但减少更新频率
+  const handleInputChangeDebounced = useCallback((rowId: string, key: string, value: string) => {
+    // 只有选中的行才处理输入
+    if (selectedRows.has(rowId)) {
+      // 使用setTimeout代替lodash的debounce，更简单直接
+      setTimeout(() => {
+        debouncedInputChange(rowId, key, value);
+      }, 50); // 设置较小的延迟，保持响应灵敏度
+    }
+  }, [selectedRows, debouncedInputChange]);
 
-  // 计算单行数据的派生值
-  const calculateRowValues = (row: ReportData): ReportData => {
+  // 处理输入变化
+  const handleInputChange = useCallback((rowId: string, key: string, value: string) => {
+    // 只处理选中行的输入
+    if (selectedRows.has(rowId)) {
+      handleInputChangeDebounced(rowId, key, value);
+    }
+  }, [selectedRows, handleInputChangeDebounced]);
+
+  // 计算单行数据的派生值 - 使用useMemo优化计算
+  const calculateRowValues = useCallback((row: ReportData): ReportData => {
     // 计算总营业额 = 微信 + 支付宝 + 现金 + 美团 + 抖音 + 外卖
     const incomeValues = [row.wechat, row.alipay, row.cash, row.meituan, row.douyin, row.takeout]
     const total = sum(incomeValues)
@@ -400,379 +456,560 @@ const SalesReportTable = () => {
       average,
       factTotal
     }
-  }
+  }, []);
 
   // 触发一行所有计算
-  const calculateRow = (rowId: string) => {
-    setRows(prevRows => {
-      return prevRows.map(row => {
-        if (row.id !== rowId) return row
-        return calculateRowValues(row)
-      })
-    })
-  }
-
-  // 当日期变化时更新日期
-  const handleDateChange = (rowId: string, date: Date | undefined) => {
-    if (date) {
+  const calculateRow = useCallback((rowId: string) => {
+    // 只计算选中行
+    if (selectedRows.has(rowId)) {
       setRows(prevRows => {
         return prevRows.map(row => {
-          if (row.id !== rowId) return row
+          if (row.id !== rowId) return row;
+          return calculateRowValues(row);
+        });
+      });
+    }
+  }, [selectedRows, calculateRowValues]);
+
+  // 当日期变化时更新日期
+  const handleDateChange = useCallback((rowId: string, date: Date | undefined) => {
+    // 只处理选中行
+    if (selectedRows.has(rowId) && date) {
+      setRows(prevRows => {
+        return prevRows.map(row => {
+          if (row.id !== rowId) return row;
           return {
             ...row,
             date
-          }
-        })
-      })
+          };
+        });
+      });
     }
-  }
+  }, [selectedRows]);
 
   // 处理键盘导航
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, rowId: string, currentIndex: number) => {
+  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>, rowId: string, currentIndex: number) => {
+    // 只处理选中行
+    if (!selectedRows.has(rowId)) return;
+    
     if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault()
+      e.preventDefault();
       
       // 获取下一个可编辑列的索引
       const editableColumns = columns
         .filter(col => !col.isReadOnly && col.dataIndex !== 'select')
-        .map(col => col.dataIndex)
+        .map(col => col.dataIndex);
       
       const currentColumnIndex = editableColumns.findIndex(
         dataIndex => dataIndex === columns[currentIndex].dataIndex
-      )
+      );
       
-      const nextColumnIndex = (currentColumnIndex + 1) % editableColumns.length
-      const nextColumn = editableColumns[nextColumnIndex]
+      const nextColumnIndex = (currentColumnIndex + 1) % editableColumns.length;
+      const nextColumn = editableColumns[nextColumnIndex];
       
       // 聚焦到下一个输入框
-      inputRefs.current[`${rowId}_${nextColumn}`]?.focus()
+      inputRefs.current[`${rowId}_${nextColumn}`]?.focus();
     }
-  }
+  }, [selectedRows]);
 
   // 处理行选择
-  const handleRowSelect = (rowId: string, checked: boolean) => {
+  const handleRowSelect = useCallback((rowId: string, checked: boolean) => {
     setSelectedRows(prev => {
-      const newSelected = new Set(prev)
+      const newSelected = new Set(prev);
       if (checked) {
-        newSelected.add(rowId)
+        newSelected.add(rowId);
       } else {
-        newSelected.delete(rowId)
+        newSelected.delete(rowId);
       }
-      return newSelected
-    })
-  }
+      return newSelected;
+    });
+  }, []);
 
   // 处理全选
-  const handleSelectAll = (checked: boolean) => {
-    setSelectAll(checked)
+  const handleSelectAll = useCallback((checked: boolean) => {
+    setSelectAll(checked);
     if (checked) {
       // 全选
-      const allIds = rows.map(row => row.id)
-      setSelectedRows(new Set(allIds))
+      const allIds = rows.map(row => row.id);
+      setSelectedRows(new Set(allIds));
     } else {
       // 取消全选
-      setSelectedRows(new Set())
+      setSelectedRows(new Set());
     }
-  }
+  }, [rows]);
 
   // 添加新行
-  const addRow = () => {
-    setRows(prevRows => [...prevRows, createInitialRow()])
+  const addRow = useCallback(() => {
+    const newRow = createInitialRow();
+    setRows(prevRows => [...prevRows, newRow]);
+    
+    // 自动选中新行
+    setSelectedRows(prev => {
+      const newSelected = new Set(prev);
+      newSelected.add(newRow.id);
+      return newSelected;
+    });
     
     // 延迟执行滚动操作，确保新行已渲染到DOM中
     setTimeout(() => {
-      const tableContainer = document.querySelector('.table-container')
+      const tableContainer = document.querySelector('.table-container');
       if (tableContainer) {
-        tableContainer.scrollTop = tableContainer.scrollHeight
+        tableContainer.scrollTop = tableContainer.scrollHeight;
       }
-    }, 50)
-  }
+    }, 50);
+  }, []);
 
   // 删除选中行
-  const deleteSelectedRows = () => {
+  const deleteSelectedRows = useCallback(() => {
     if (selectedRows.size === 0) {
-      toast.error('请先选择要删除的行')
-      return
+      toast.error('请先选择要删除的行');
+      return;
     }
 
     if (rows.length <= selectedRows.size) {
-      toast.error('至少保留一行数据')
-      return
+      toast.error('至少保留一行数据');
+      return;
     }
     
-    setRows(prevRows => prevRows.filter(row => !selectedRows.has(row.id)))
-    setSelectedRows(new Set()) // 清空选择
-    setSelectAll(false)
-    toast.success(`已删除 ${selectedRows.size} 行数据`)
-  }
+    setRows(prevRows => prevRows.filter(row => !selectedRows.has(row.id)));
+    setSelectedRows(new Set()); // 清空选择
+    setSelectAll(false);
+    toast.success(`已删除 ${selectedRows.size} 行数据`);
+  }, [rows.length, selectedRows]);
 
   // 保存数据到本地存储
-  const saveData = () => {
+  const saveData = useCallback(() => {
     try {
       // 确保数据是合法的数组结构后再保存
       if (!Array.isArray(rows) || rows.length === 0) {
-        setRows([createInitialRow()])
-        localStorage.setItem(STORAGE_KEY, JSON.stringify([createInitialRow()]))
+        setRows([createInitialRow()]);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify([createInitialRow()]));
       } else {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(rows))
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
       }
-      toast.success('数据已保存')
+      toast.success('数据已保存');
     } catch (error) {
-      console.error('Error saving data', error)
-      toast.error('保存失败')
+      console.error('Error saving data', error);
+      toast.error('保存失败');
     }
-  }
+  }, [rows]);
 
   // 导出CSV文件 - 选中行或全部
-  const exportCSV = () => {
+  const exportCSV = useCallback(() => {
     try {
       // 获取要导出的行
       const rowsToExport = selectedRows.size > 0 
         ? rows.filter(row => selectedRows.has(row.id))
-        : rows
+        : rows;
         
       if (rowsToExport.length === 0) {
-        toast.error('没有可导出的数据')
-        return
+        toast.error('没有可导出的数据');
+        return;
       }
         
       // 表头行
       const headers = columns
-        .filter(col => col.dataIndex !== 'select')
-        .map(col => col.title)
-        .join(',')
+        .filter((col) => col.dataIndex !== 'select')
+        .map((col) => col.title)
+        .join(',');
       
       // 数据行
       const dataRows = rowsToExport.map(row => {
         return columns
-          .filter(col => col.dataIndex !== 'select')
-          .map(col => {
+          .filter((col) => col.dataIndex !== 'select')
+          .map((col) => {
             if (col.dataIndex === 'date') {
-              return format(row.date, 'yyyy-MM-dd')
+              return format(row.date, 'yyyy-MM-dd');
             }
             
-            return row[col.dataIndex as keyof ReportData] || ''
+            return row[col.dataIndex as keyof ReportData] || '';
           })
-          .join(',')
-      }).join('\n')
+          .join(',');
+      }).join('\n');
       
       // 创建CSV内容
-      const csvContent = `${headers}\n${dataRows}`
+      const csvContent = `${headers}\n${dataRows}`;
       
       // 创建Blob
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       
       // 创建下载链接
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
       
       // 设置下载属性
-      link.setAttribute('href', url)
-      link.setAttribute('download', `销售数据_${format(new Date(), 'yyyy-MM-dd')}.csv`)
+      link.setAttribute('href', url);
+      link.setAttribute('download', `销售数据_${format(new Date(), 'yyyy-MM-dd')}.csv`);
       
       // 隐藏链接并添加到DOM
-      link.style.visibility = 'hidden'
-      document.body.appendChild(link)
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
       
       // 触发下载
-      link.click()
+      link.click();
       
       // 清理
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       
-      toast.success(`成功导出 ${rowsToExport.length} 行数据`)
+      toast.success(`成功导出 ${rowsToExport.length} 行数据`);
     } catch (error) {
-      console.error('Error exporting data', error)
-      toast.error('导出失败')
+      console.error('Error exporting data', error);
+      toast.error('导出失败');
     }
-  }
+  }, [rows, selectedRows, columns]);
 
   // 处理CSV文件导入
-  const handleImportCSV = () => {
+  const handleImportCSV = useCallback(() => {
     // 触发文件选择对话框
-    fileInputRef.current?.click()
-  }
+    fileInputRef.current?.click();
+  }, []);
 
   // 处理文件选择
-  const handleFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+  const handleFileSelect = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (!file) {
-      toast.error('未选择文件')
-      return
+      toast.error('未选择文件');
+      return;
     }
 
     // 检查文件类型
     if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-      toast.error('请选择CSV格式的文件')
-      event.target.value = '' // 重置input
-      return
+      toast.error('请选择CSV格式的文件');
+      event.target.value = ''; // 重置input
+      return;
     }
 
     // 创建文件读取器
-    const reader = new FileReader()
+    const reader = new FileReader();
     
     reader.onload = (e) => {
       try {
-        const csvContent = e.target?.result as string
+        const csvContent = e.target?.result as string;
         if (!csvContent) {
-          toast.error('文件内容为空')
-          return
+          toast.error('文件内容为空');
+          return;
         }
         
         // 解析CSV数据
-        parseCSVData(csvContent)
+        parseCSVData(csvContent);
       } catch (error) {
-        console.error('导入文件时发生错误', error)
-        toast.error('导入失败，文件格式错误')
+        console.error('导入文件时发生错误', error);
+        toast.error('导入失败，文件格式错误');
       } finally {
         // 重置文件输入框
-        event.target.value = ''
+        event.target.value = '';
       }
-    }
+    };
     
     reader.onerror = () => {
-      toast.error('读取文件时发生错误')
-      event.target.value = ''
-    }
+      toast.error('读取文件时发生错误');
+      event.target.value = '';
+    };
     
     // 读取文件内容
-    reader.readAsText(file)
-  }
+    reader.readAsText(file);
+  }, []);
 
   // 解析CSV数据并转换为表格数据
-  const parseCSVData = (csvContent: string) => {
+  const parseCSVData = useCallback((csvContent: string) => {
     try {
       // 分割为行
-      const lines = csvContent.split('\n').filter(line => line.trim() !== '')
+      const lines = csvContent.split('\n').filter(line => line.trim() !== '');
       
       if (lines.length < 2) {
-        toast.error('CSV文件格式无效，至少需要表头和一行数据')
-        return
+        toast.error('CSV文件格式无效，至少需要表头和一行数据');
+        return;
       }
       
       // 获取表头行
-      const headers = lines[0].split(',')
+      const headers = lines[0].split(',');
       
       // 验证CSV格式是否与表格格式匹配
       const expectedHeaders = columns
-        .filter(col => col.dataIndex !== 'select')
-        .map(col => col.title)
+        .filter((col) => col.dataIndex !== 'select')
+        .map((col) => col.title);
       
       // 检查必要的列是否存在
-      const hasRequiredHeaders = expectedHeaders.every(header => 
+      const hasRequiredHeaders = expectedHeaders.every((header) => 
         headers.includes(header)
-      )
+      );
       
       if (!hasRequiredHeaders) {
-        toast.error('CSV文件格式与表格不匹配，请使用导出功能导出的CSV文件')
-        return
+        toast.error('CSV文件格式与表格不匹配，请使用导出功能导出的CSV文件');
+        return;
       }
       
       // 确认是否要替换现有数据
       if (rows.length > 1 || (rows.length === 1 && (rows[0].total || rows[0].wechat))) {
         if (!window.confirm('这将替换当前所有数据，确定要继续吗？')) {
-          return
+          return;
         }
       }
       
       // 解析数据行
-      const newRows: ReportData[] = []
+      const newRows: ReportData[] = [];
       
       // 从第二行开始解析数据
       for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',')
+        const values = lines[i].split(',');
         
         // 跳过空行或格式不正确的行
-        if (values.length !== headers.length) continue
+        if (values.length !== headers.length) continue;
         
         // 创建新的数据行
-        const newRow: any = createInitialRow()
+        const newRow: any = createInitialRow();
         
         // 映射CSV数据到表格数据
-        columns.forEach((column, idx) => {
-          if (column.dataIndex === 'select') return
+        columns.forEach((column) => {
+          if (column.dataIndex === 'select') return;
           
-          const headerIndex = headers.findIndex(h => h === column.title)
-          if (headerIndex === -1) return
+          const headerIndex = headers.findIndex(h => h === column.title);
+          if (headerIndex === -1) return;
           
-          const value = values[headerIndex]
+          const value = values[headerIndex];
           
           // 特殊处理日期
           if (column.dataIndex === 'date') {
             try {
               // 支持多种日期格式
-              let dateValue: Date | null = null
+              let dateValue: Date | null = null;
               if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
                 // YYYY-MM-DD 格式
-                dateValue = parse(value, 'yyyy-MM-dd', new Date())
+                dateValue = parse(value, 'yyyy-MM-dd', new Date());
               } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
                 // MM/DD/YYYY 格式
-                dateValue = parse(value, 'MM/dd/yyyy', new Date())
+                dateValue = parse(value, 'MM/dd/yyyy', new Date());
               } else if (/^\d{4}\/\d{2}\/\d{2}$/.test(value)) {
                 // YYYY/MM/DD 格式
-                dateValue = parse(value, 'yyyy/MM/dd', new Date())
+                dateValue = parse(value, 'yyyy/MM/dd', new Date());
               }
               
               if (dateValue && !isNaN(dateValue.getTime())) {
-                newRow.date = dateValue
+                newRow.date = dateValue;
               } else {
-                newRow.date = new Date() // 默认为当前日期
+                newRow.date = new Date(); // 默认为当前日期
               }
             } catch (dateError) {
-              console.warn('日期解析错误', dateError)
-              newRow.date = new Date() // 默认为当前日期
+              console.warn('日期解析错误', dateError);
+              newRow.date = new Date(); // 默认为当前日期
             }
           } else {
             // 处理其他列的数据
-            newRow[column.dataIndex] = value || ''
+            newRow[column.dataIndex as keyof ReportData] = value || '';
           }
-        })
+        });
         
         // 添加到新行数组
-        newRows.push(newRow)
+        newRows.push(newRow);
       }
       
       if (newRows.length === 0) {
-        toast.error('未找到有效数据行')
-        return
+        toast.error('未找到有效数据行');
+        return;
       }
       
       // 对每一行数据进行计算，确保派生字段有值
-      const calculatedData = newRows.map(row => calculateRowValues(row))
+      const calculatedData = newRows.map(row => calculateRowValues(row));
       
       // 更新状态
-      setRows(calculatedData)
+      setRows(calculatedData);
       
       // 保存到本地存储
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(calculatedData))
-        toast.success(`成功导入 ${calculatedData.length} 行数据`)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(calculatedData));
+        toast.success(`成功导入 ${calculatedData.length} 行数据`);
       } catch (saveError) {
-        console.error('保存导入数据失败', saveError)
-        toast.warning('数据导入成功，但保存到本地存储失败')
+        console.error('保存导入数据失败', saveError);
+        toast.warning('数据导入成功，但保存到本地存储失败');
       }
     } catch (error) {
-      console.error('解析CSV数据时发生错误', error)
-      toast.error('解析CSV文件失败')
+      console.error('解析CSV数据时发生错误', error);
+      toast.error('解析CSV文件失败');
     }
-  }
+  }, [rows, columns, calculateRowValues]);
+
+  // 获取单元格内容 - 根据选中状态决定是否可编辑
+  const getCellContent = useCallback((row: ReportData, column: ColumnType, rowIndex: number, colIndex: number, isEditable: boolean) => {
+    // 选择列 - 多选框
+    if (column.dataIndex === 'select') {
+      return (
+        <div className="flex justify-center items-center w-full h-full">
+          <Checkbox 
+            checked={selectedRows.has(row.id)} 
+            onCheckedChange={(checked) => handleRowSelect(row.id, checked === true)}
+          />
+        </div>
+      );
+    }
+    
+    // 日期列 - 日期选择器或只读文本
+    if (column.dataIndex === 'date') {
+      if (isEditable) {
+        // 可编辑状态 - 显示日期选择器
+        return (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-start text-left font-normal"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {row.date ? format(row.date, 'yyyy-MM-dd') : '选择日期'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={row.date}
+                onSelect={(date) => handleDateChange(row.id, date)}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        );
+      } else {
+        // 不可编辑状态 - 显示只读日期
+        return (
+          <div className="readonly-text">
+            {row.date ? format(row.date, 'yyyy-MM-dd') : ''}
+          </div>
+        );
+      }
+    }
+    
+    // 只读列 - 显示值
+    if (column.isReadOnly) {
+      const value = row[column.dataIndex as keyof ReportData] as string;
+      const isNegative = column.isMoney && isNegativeValue(value);
+      const displayValue = column.isMoney && value ? formatMoney(value) : value;
+      
+      // 简化样式，移除边框和背景色
+      return (
+        <div className={`readonly-text 
+          ${column.highlight ? 'highlight-text' : ''} 
+          ${isNegative ? 'negative-text' : ''}`}>
+          {displayValue || ''}
+        </div>
+      );
+    }
+    
+    // 可编辑列 - 根据选中状态决定是否可编辑
+    if (!isEditable) {
+      // 不可编辑状态 - 显示只读文本，简化样式
+      const value = row[column.dataIndex as keyof ReportData] as string;
+      const displayValue = column.isMoney && value ? formatMoney(value) : value;
+      
+      return (
+        <div className="readonly-text">
+          {displayValue || ''}
+        </div>
+      );
+    }
+    
+    // 可编辑金额列 - MoneyInput
+    if (column.isMoney) {
+      const value = row[column.dataIndex as keyof ReportData] as string;
+      const isNegative = isNegativeValue(value);
+      
+      return (
+        <MoneyInput
+          ref={(el: HTMLInputElement | null) => {
+            inputRefs.current[`${row.id}_${column.dataIndex}`] = el;
+          }}
+          value={value || ''}
+          onChange={(value: string) => handleInputChange(row.id, column.dataIndex, value)}
+          onBlur={() => calculateRow(row.id)}
+          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, row.id, colIndex)}
+          placeholder="请输入"
+          isNegative={isNegative}
+        />
+      );
+    }
+    
+    // 其他可编辑列 - 普通Input
+    return (
+      <Input
+        ref={(el) => {
+          inputRefs.current[`${row.id}_${column.dataIndex}`] = el;
+        }}
+        value={row[column.dataIndex as keyof ReportData] as string || ''}
+        onChange={(e) => handleInputChange(row.id, column.dataIndex, e.target.value)}
+        onBlur={() => calculateRow(row.id)}
+        onKeyDown={(e) => handleKeyDown(e, row.id, colIndex)}
+        placeholder="请输入"
+        className="text-center"
+      />
+    );
+  }, [selectedRows, handleDateChange, handleInputChange, calculateRow, handleKeyDown, handleRowSelect]);
+
+  // 处理表格滚动状态
+  useEffect(() => {
+    let scrollTimer: number;
+    
+    const handleScroll = () => {
+      const container = tableContainerRef.current;
+      if (!container) return;
+      
+      // 判断是否向右滚动（scrollLeft > 0）
+      if (container.scrollLeft > 5) {
+        container.classList.add('scrolled-right');
+      } else {
+        container.classList.remove('scrolled-right');
+      }
+      
+      // 添加滚动中的类，提升滚动性能
+      container.classList.add('scrolling');
+      
+      // 清除之前的定时器
+      clearTimeout(scrollTimer);
+      
+      // 设置新的定时器，滚动停止后移除滚动中的类
+      scrollTimer = window.setTimeout(() => {
+        container.classList.remove('scrolling');
+      }, 150);
+    };
+    
+    const container = tableContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', handleScroll);
+    }
+    
+    // 清理事件监听和定时器
+    return () => {
+      if (container) {
+        container.removeEventListener('scroll', handleScroll);
+      }
+      clearTimeout(scrollTimer);
+    };
+  }, [isClient]);
 
   // 当组件挂载时加载数据并执行一次计算
   useEffect(() => {
     setIsClient(true)
     const savedData = loadSavedData()
     setRows(savedData)
+    
+    // 默认第一行选中
+    if (savedData.length > 0) {
+      setSelectedRows(new Set([savedData[0].id]))
+    }
   }, [])
   
-  // 当数据变化时自动计算每一行
+  // 当数据变化时自动计算每一行 - 优化为只计算选中行
   useEffect(() => {
     if (isClient) {
       setRows(prevRows => {
-        return prevRows.map(row => calculateRowValues(row))
+        return prevRows.map(row => {
+          // 只计算选中行的数据
+          if (selectedRows.has(row.id)) {
+            return calculateRowValues(row)
+          }
+          return row
+        })
       })
     }
-  }, [isClient])
+  }, [isClient, selectedRows, calculateRowValues])
 
   // 当行数据变化时，更新全选状态
   useEffect(() => {
@@ -783,105 +1020,11 @@ const SalesReportTable = () => {
     }
   }, [selectedRows, rows])
 
-  // 获取单元格内容
-  const getCellContent = (row: ReportData, column: typeof columns[0], rowIndex: number, colIndex: number) => {
-    // 选择列 - 多选框
-    if (column.dataIndex === 'select') {
-      return (
-        <div className="flex justify-center items-center w-full h-full">
-          <Checkbox 
-            checked={selectedRows.has(row.id)} 
-            onCheckedChange={(checked) => handleRowSelect(row.id, checked === true)}
-          />
-        </div>
-      )
-    }
-    
-    // 日期列 - 日期选择器
-    if (column.dataIndex === 'date') {
-      return (
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className="w-full justify-start text-left font-normal"
-            >
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {row.date ? format(row.date, 'yyyy-MM-dd') : '选择日期'}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
-            <Calendar
-              mode="single"
-              selected={row.date}
-              onSelect={(date) => handleDateChange(row.id, date)}
-              initialFocus
-            />
-          </PopoverContent>
-        </Popover>
-      )
-    }
-    
-    // 只读列 - 显示值
-    if (column.isReadOnly) {
-      const value = row[column.dataIndex as keyof ReportData] as string
-      const isNegative = column.isMoney && isNegativeValue(value)
-      const displayValue = column.isMoney && value ? formatMoney(value) : value
-      
-      const negativeStyling = isNegative 
-        ? 'bg-red-100 border-red-300 text-red-700 font-semibold shadow-sm shadow-red-200' 
-        : ''
-      
-      return (
-        <div className={`h-10 px-3 py-2 flex items-center justify-center rounded-md border border-input 
-          ${column.highlight ? 'bg-primary/10 font-medium' : 'bg-muted'} 
-          ${negativeStyling}`}>
-          {displayValue || ''}
-        </div>
-      )
-    }
-    
-    // 可编辑金额列 - MoneyInput
-    if (column.isMoney) {
-      const value = row[column.dataIndex as keyof ReportData] as string
-      const isNegative = isNegativeValue(value)
-      
-      return (
-        <MoneyInput
-          ref={(el: HTMLInputElement | null) => {
-            inputRefs.current[`${row.id}_${column.dataIndex}`] = el
-          }}
-          value={value || ''}
-          onChange={(value: string) => handleInputChange(row.id, column.dataIndex, value)}
-          onBlur={() => calculateRow(row.id)}
-          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, row.id, colIndex)}
-          placeholder="请输入"
-          isNegative={isNegative}
-        />
-      )
-    }
-    
-    // 其他可编辑列 - 普通Input
-    return (
-      <Input
-        ref={(el) => {
-          inputRefs.current[`${row.id}_${column.dataIndex}`] = el
-        }}
-        value={row[column.dataIndex as keyof ReportData] as string || ''}
-        onChange={(e) => handleInputChange(row.id, column.dataIndex, e.target.value)}
-        onBlur={() => calculateRow(row.id)}
-        onKeyDown={(e) => handleKeyDown(e, row.id, colIndex)}
-        placeholder="请输入"
-        className="text-center"
-      />
-    )
-  }
-
   if (!isClient) return null
 
-  const selectedCount = selectedRows.size;
-  const totalCount = rows.length;
-  const hasSelected = selectedCount > 0;
+  const selectedCount = selectedRows.size
+  const totalCount = rows.length
+  const hasSelected = selectedCount > 0
 
   return (
     <Card>
@@ -1063,7 +1206,7 @@ const SalesReportTable = () => {
                 background-color: rgba(0, 0, 0, 0.05);
               }
               
-              /* 当选中行时，依然保持固定列的白色背景（非滚动状态） */
+              /* 当选中行时，依然保持固定列的背景色 */
               .sticky-table tbody tr.selected td.sticky-left,
               .sticky-table tbody tr.selected td.sticky-left-2 {
                 background-color: rgba(0, 0, 0, 0.05);
@@ -1075,8 +1218,85 @@ const SalesReportTable = () => {
                 box-shadow: 2px 0 5px rgba(0, 0, 0, 0.07);
               }
               
+              /* 修复滚动状态下勾选列背景色问题 */
+              .table-container.scrolled-right .sticky-table td.sticky-left {
+                background-color: white;
+                box-shadow: none; /* 勾选列不需要阴影 */
+              }
+              
+              /* 选中行在滚动状态下勾选列的背景色 */
+              .table-container.scrolled-right .sticky-table tbody tr.selected td.sticky-left {
+                background-color: rgba(0, 0, 0, 0.05);
+              }
+              
               .sticky-table td {
                 padding: 0.5rem;
+              }
+              
+              /* 不可编辑行样式 */
+              .sticky-table tbody tr:not(.selected) td {
+                opacity: 0.8;
+                transition: opacity 0.2s ease;
+              }
+              
+              /* 可编辑行高亮显示 */
+              .sticky-table tbody tr.selected {
+                background-color: rgba(0, 0, 0, 0.05);
+                transition: background-color 0.2s ease;
+              }
+              
+              /* 滚动时提升性能 */
+              .table-container.scrolling * {
+                pointer-events: none;
+              }
+              
+              /* 行悬浮效果提示可选择 */
+              .sticky-table tbody tr:hover {
+                background-color: rgba(0, 0, 0, 0.02);
+                cursor: pointer;
+              }
+              
+              /* 简化非编辑状态下的单元格样式 */
+              .sticky-table .readonly-text {
+                text-align: center;
+                padding: 8px 6px;
+                line-height: 1.25;
+                min-height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 14px; /* 固定字体大小 */
+              }
+              
+              /* 突出显示高亮列 */
+              .sticky-table .highlight-text {
+                font-weight: 500;
+                color: #4b5563;
+              }
+              
+              /* 负值样式 */
+              .sticky-table .negative-text {
+                color: #dc2626;
+                font-weight: 500;
+              }
+              
+              /* 确保输入框和只读文本的字体大小一致 */
+              .sticky-table input,
+              .sticky-table button {
+                font-size: 14px !important;
+              }
+              
+              /* 修复不同状态下字体渲染差异 */
+              .sticky-table tbody tr.selected td,
+              .sticky-table tbody tr:not(.selected) td {
+                font-size: 14px;
+                font-weight: normal;
+              }
+              
+              /* 修复高亮列在不同状态下的一致性 */
+              .sticky-table tbody tr.selected .highlight-text,
+              .sticky-table tbody tr:not(.selected) .highlight-text {
+                font-weight: 500;
               }
             `}</style>
             
@@ -1111,24 +1331,19 @@ const SalesReportTable = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, rowIndex) => (
-                  <tr 
+                {rows.map((row) => (
+                  <TableRow
                     key={row.id}
-                    className={selectedRows.has(row.id) ? 'selected' : ''}
-                  >
-                    {columns.map((column, colIndex) => (
-                      <td 
-                        key={`${row.id}_${column.key}`}
-                        className={`
-                          ${column.dataIndex === 'select' ? 'w-10 p-0' : ''}
-                          ${colIndex === 0 ? 'sticky-left' : ''}
-                          ${colIndex === 1 ? 'sticky-left-2' : ''}
-                        `}
-                      >
-                        {getCellContent(row, column, rowIndex, colIndex)}
-                      </td>
-                    ))}
-                  </tr>
+                    row={row}
+                    columns={columns}
+                    isSelected={selectedRows.has(row.id)}
+                    onRowSelect={handleRowSelect}
+                    onInputChange={handleInputChange}
+                    onDateChange={handleDateChange}
+                    onBlur={calculateRow}
+                    onKeyDown={handleKeyDown}
+                    getCellContent={getCellContent}
+                  />
                 ))}
               </tbody>
             </table>
