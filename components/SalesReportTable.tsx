@@ -11,14 +11,6 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table"
 import { format, parse } from "date-fns"
 import { BarChart, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, Plus, Save, Trash2, Upload } from "lucide-react"
 import { ChangeEvent, KeyboardEvent, useEffect, useRef, useState } from "react"
@@ -458,6 +450,14 @@ const SalesReportTable = () => {
   // 添加新行
   const addRow = () => {
     setRows(prevRows => [...prevRows, createInitialRow()])
+    
+    // 延迟执行滚动操作，确保新行已渲染到DOM中
+    setTimeout(() => {
+      const tableContainer = document.querySelector('.table-container')
+      if (tableContainer) {
+        tableContainer.scrollTop = tableContainer.scrollHeight
+      }
+    }, 50)
   }
 
   // 删除选中行
@@ -925,7 +925,7 @@ const SalesReportTable = () => {
       <CardContent className="p-4">
         <div className="w-full relative" style={{ minWidth: "100%" }}>
           <div 
-            className="overflow-auto border rounded-md custom-scrollbar"
+            className="overflow-auto border rounded-md custom-scrollbar table-container"
             style={{
               maxHeight: '50vh',
               scrollbarWidth: 'thin',
@@ -952,21 +952,59 @@ const SalesReportTable = () => {
               .custom-scrollbar::-webkit-scrollbar-thumb:hover {
                 background-color: rgba(156, 163, 175, 0.8);
               }
+              
+              /* 修改实现方式：直接使用原生表格样式 */
+              .sticky-table {
+                border-collapse: separate;
+                border-spacing: 0;
+                width: 100%;
+              }
+              
+              .sticky-table thead th {
+                position: sticky;
+                top: 0;
+                z-index: 10;
+                background-color: white;
+                box-shadow: inset 0 -1px 0 #e5e7eb;
+                font-weight: 500;
+                text-align: center;
+                color: #6b7280;
+                padding: 0.75rem;
+                font-size: 0.875rem;
+                line-height: 1.25rem;
+              }
+              
+              .sticky-table tbody tr {
+                border-bottom: 1px solid #e5e7eb;
+              }
+              
+              .sticky-table tbody tr:last-child {
+                border-bottom: none;
+              }
+              
+              .sticky-table tbody tr.selected {
+                background-color: rgba(0, 0, 0, 0.05);
+              }
+              
+              .sticky-table td {
+                padding: 0.5rem;
+              }
             `}</style>
-            <Table>
-              <TableHeader className="sticky top-0 bg-white z-20 shadow-sm after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border">
-                <TableRow>
+            
+            {/* 使用原生表格替代shadcn的Table组件 */}
+            <table className="sticky-table">
+              <thead>
+                <tr>
                   {columns.map(column => (
-                    <TableHead 
-                      key={column.key} 
-                      className={`whitespace-nowrap text-center ${column.dataIndex === 'select' ? 'p-0' : ''} bg-white sticky top-0`}
+                    <th 
+                      key={column.key}
                       style={{ 
                         width: column.width,
-                        minWidth: column.minWidth
+                        minWidth: column.minWidth,
                       }}
                     >
                       {column.dataIndex === 'select' ? (
-                        <div className="flex justify-center items-center w-full h-full p-2">
+                        <div className="flex justify-center items-center w-full h-full">
                           <Checkbox 
                             checked={selectAll} 
                             onCheckedChange={handleSelectAll}
@@ -975,28 +1013,28 @@ const SalesReportTable = () => {
                       ) : (
                         column.title
                       )}
-                    </TableHead>
+                    </th>
                   ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+                </tr>
+              </thead>
+              <tbody>
                 {rows.map((row, rowIndex) => (
-                  <TableRow 
+                  <tr 
                     key={row.id}
-                    className={selectedRows.has(row.id) ? 'bg-muted/50' : ''}
+                    className={selectedRows.has(row.id) ? 'selected' : ''}
                   >
                     {columns.map((column, colIndex) => (
-                      <TableCell 
+                      <td 
                         key={`${row.id}_${column.key}`} 
-                        className={`${column.dataIndex === 'select' ? 'p-0 w-10' : 'p-2'}`}
+                        className={column.dataIndex === 'select' ? 'w-10 p-0' : ''}
                       >
                         {getCellContent(row, column, rowIndex, colIndex)}
-                      </TableCell>
+                      </td>
                     ))}
-                  </TableRow>
+                  </tr>
                 ))}
-              </TableBody>
-            </Table>
+              </tbody>
+            </table>
           </div>
         </div>
       </CardContent>
