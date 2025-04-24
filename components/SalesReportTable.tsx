@@ -19,9 +19,9 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table"
-import { format } from "date-fns"
-import { BarChart, Calendar as CalendarIcon, ChevronDown, ChevronUp, Database, Download, Plus, Save, Trash2 } from "lucide-react"
-import { KeyboardEvent, useEffect, useRef, useState } from "react"
+import { format, parse } from "date-fns"
+import { BarChart, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, Plus, Save, Trash2, Upload } from "lucide-react"
+import { ChangeEvent, KeyboardEvent, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import MoneyInput, { divide, formatMoney, isNegativeValue, subtract, sum } from "./MoneyInput"
 import SalesCharts from "./SalesCharts"
@@ -238,107 +238,6 @@ const formatNumberInput = (value: string) => {
   return numericValue
 }
 
-// 生成mock数据的函数
-const generateMockData = (daysCount = 30): ReportData[] => {
-  const mockData: ReportData[] = [];
-  
-  // 设置一些真实的数据范围
-  const wechatRange = { min: 2000, max: 5000 };
-  const alipayRange = { min: 1500, max: 3500 };
-  const cashRange = { min: 500, max: 1500 };
-  const meituanRange = { min: 800, max: 2000 };
-  const douyinRange = { min: 200, max: 1000 };
-  const takeoutRange = { min: 1000, max: 3000 };
-  
-  const vegetableRange = { min: 800, max: 1500 };
-  const frozenRange = { min: 500, max: 1200 };
-  const dryRange = { min: 300, max: 800 };
-  
-  const peopleRange = { min: 30, max: 80 };
-  
-  // 根据周末和工作日调整销售额
-  const getAdjustmentFactor = (date: Date): number => {
-    const day = date.getDay();
-    // 周五、周六、周日销售额更高
-    if (day === 5 || day === 6 || day === 0) {
-      return 1.3;
-    }
-    return 1.0;
-  };
-  
-  // 生成随机金额字符串，考虑小数点
-  const generateRandomAmount = (min: number, max: number, factor = 1): string => {
-    const baseAmount = Math.random() * (max - min) + min;
-    // 调整金额并保留两位小数
-    return (baseAmount * factor).toFixed(2);
-  };
-  
-  // 确保日期是递增的，从一个月前开始到昨天
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - daysCount);
-  
-  // 生成过去N天的数据
-  for (let i = 0; i < daysCount; i++) {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + i);
-    
-    const factor = getAdjustmentFactor(date);
-    
-    // 每周波动加入一些随机性，使数据更真实
-    const weeklyVariation = 0.9 + (Math.random() * 0.3); // 0.9-1.2的随机变化
-    
-    // 随机销售数据
-    const wechat = generateRandomAmount(wechatRange.min, wechatRange.max, factor * weeklyVariation);
-    const alipay = generateRandomAmount(alipayRange.min, alipayRange.max, factor * weeklyVariation);
-    const cash = generateRandomAmount(cashRange.min, cashRange.max, factor * weeklyVariation);
-    const meituan = generateRandomAmount(meituanRange.min, meituanRange.max, factor * weeklyVariation);
-    const douyin = generateRandomAmount(douyinRange.min, douyinRange.max, factor * weeklyVariation);
-    const takeout = generateRandomAmount(takeoutRange.min, takeoutRange.max, factor * weeklyVariation);
-    
-    // 随机采购数据，采购数据随销售额有一定关联但不完全线性
-    const totalIncome = parseFloat(wechat) + parseFloat(alipay) + parseFloat(cash) + 
-                        parseFloat(meituan) + parseFloat(douyin) + parseFloat(takeout);
-    
-    // 采购占销售额的一定比例，但有随机浮动
-    const purchaseFactor = 0.3 + (Math.random() * 0.1); // 30%-40%的采购成本比例
-    const totalPurchase = totalIncome * purchaseFactor;
-    
-    // 随机分配总采购额到各类别
-    const vegetablePct = 0.4 + (Math.random() * 0.2); // 40%-60%
-    const frozenPct = 0.2 + (Math.random() * 0.2); // 20%-40%
-    const dryPct = 1 - vegetablePct - frozenPct; // 剩余部分
-    
-    const vegetable = (totalPurchase * vegetablePct).toFixed(2);
-    const frozen = (totalPurchase * frozenPct).toFixed(2);
-    const dry = (totalPurchase * dryPct).toFixed(2);
-    
-    // 人数根据销售额估算，每人平均消费100-200元
-    const avgConsumption = 100 + Math.random() * 100;
-    const people = Math.max(10, Math.round(totalIncome / avgConsumption)).toString();
-    
-    mockData.push({
-      id: generateId(),
-      date,
-      wechat,
-      alipay,
-      cash,
-      meituan,
-      douyin,
-      takeout,
-      total: '', // 这些会自动计算
-      people,
-      average: '',
-      vegetable,
-      frozen,
-      dry,
-      purchaseTotal: '',
-      factTotal: ''
-    });
-  }
-  
-  return mockData;
-};
-
 const SalesReportTable = () => {
   // 从本地存储加载数据
   const loadSavedData = (): ReportData[] => {
@@ -430,6 +329,7 @@ const SalesReportTable = () => {
   const [selectAll, setSelectAll] = useState(false)
   const inputRefs = useRef<{[key: string]: HTMLInputElement | null}>({})
   const [isChartsOpen, setIsChartsOpen] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 处理输入变化
   const handleInputChange = (rowId: string, key: string, value: string) => {
@@ -660,36 +560,175 @@ const SalesReportTable = () => {
     }
   }
 
-  // 添加生成模拟数据的函数
-  const handleGenerateMockData = () => {
-    // 先确认是否要替换现有数据
-    if (rows.length > 1 || (rows.length === 1 && (rows[0].total || rows[0].wechat))) {
-      if (!window.confirm('这将替换当前所有数据，确定要继续吗？')) {
-        return;
+  // 处理CSV文件导入
+  const handleImportCSV = () => {
+    // 触发文件选择对话框
+    fileInputRef.current?.click()
+  }
+
+  // 处理文件选择
+  const handleFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      toast.error('未选择文件')
+      return
+    }
+
+    // 检查文件类型
+    if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+      toast.error('请选择CSV格式的文件')
+      event.target.value = '' // 重置input
+      return
+    }
+
+    // 创建文件读取器
+    const reader = new FileReader()
+    
+    reader.onload = (e) => {
+      try {
+        const csvContent = e.target?.result as string
+        if (!csvContent) {
+          toast.error('文件内容为空')
+          return
+        }
+        
+        // 解析CSV数据
+        parseCSVData(csvContent)
+      } catch (error) {
+        console.error('导入文件时发生错误', error)
+        toast.error('导入失败，文件格式错误')
+      } finally {
+        // 重置文件输入框
+        event.target.value = ''
       }
     }
     
-    // 生成30天的模拟数据
-    const mockData = generateMockData(30);
-    
-    // 对每一行数据进行计算，确保派生字段有值
-    const calculatedData = mockData.map(row => calculateRowValues(row));
-    
-    // 更新状态
-    setRows(calculatedData);
-    
-    // 自动保存到本地存储
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(calculatedData));
-    } catch (error) {
-      console.error('保存模拟数据失败', error);
+    reader.onerror = () => {
+      toast.error('读取文件时发生错误')
+      event.target.value = ''
     }
     
-    toast.success('已生成30天的模拟数据并保存');
-    
-    // 自动展开图表区域
-    setIsChartsOpen(true);
-  };
+    // 读取文件内容
+    reader.readAsText(file)
+  }
+
+  // 解析CSV数据并转换为表格数据
+  const parseCSVData = (csvContent: string) => {
+    try {
+      // 分割为行
+      const lines = csvContent.split('\n').filter(line => line.trim() !== '')
+      
+      if (lines.length < 2) {
+        toast.error('CSV文件格式无效，至少需要表头和一行数据')
+        return
+      }
+      
+      // 获取表头行
+      const headers = lines[0].split(',')
+      
+      // 验证CSV格式是否与表格格式匹配
+      const expectedHeaders = columns
+        .filter(col => col.dataIndex !== 'select')
+        .map(col => col.title)
+      
+      // 检查必要的列是否存在
+      const hasRequiredHeaders = expectedHeaders.every(header => 
+        headers.includes(header)
+      )
+      
+      if (!hasRequiredHeaders) {
+        toast.error('CSV文件格式与表格不匹配，请使用导出功能导出的CSV文件')
+        return
+      }
+      
+      // 确认是否要替换现有数据
+      if (rows.length > 1 || (rows.length === 1 && (rows[0].total || rows[0].wechat))) {
+        if (!window.confirm('这将替换当前所有数据，确定要继续吗？')) {
+          return
+        }
+      }
+      
+      // 解析数据行
+      const newRows: ReportData[] = []
+      
+      // 从第二行开始解析数据
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',')
+        
+        // 跳过空行或格式不正确的行
+        if (values.length !== headers.length) continue
+        
+        // 创建新的数据行
+        const newRow: any = createInitialRow()
+        
+        // 映射CSV数据到表格数据
+        columns.forEach((column, idx) => {
+          if (column.dataIndex === 'select') return
+          
+          const headerIndex = headers.findIndex(h => h === column.title)
+          if (headerIndex === -1) return
+          
+          const value = values[headerIndex]
+          
+          // 特殊处理日期
+          if (column.dataIndex === 'date') {
+            try {
+              // 支持多种日期格式
+              let dateValue: Date | null = null
+              if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                // YYYY-MM-DD 格式
+                dateValue = parse(value, 'yyyy-MM-dd', new Date())
+              } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+                // MM/DD/YYYY 格式
+                dateValue = parse(value, 'MM/dd/yyyy', new Date())
+              } else if (/^\d{4}\/\d{2}\/\d{2}$/.test(value)) {
+                // YYYY/MM/DD 格式
+                dateValue = parse(value, 'yyyy/MM/dd', new Date())
+              }
+              
+              if (dateValue && !isNaN(dateValue.getTime())) {
+                newRow.date = dateValue
+              } else {
+                newRow.date = new Date() // 默认为当前日期
+              }
+            } catch (dateError) {
+              console.warn('日期解析错误', dateError)
+              newRow.date = new Date() // 默认为当前日期
+            }
+          } else {
+            // 处理其他列的数据
+            newRow[column.dataIndex] = value || ''
+          }
+        })
+        
+        // 添加到新行数组
+        newRows.push(newRow)
+      }
+      
+      if (newRows.length === 0) {
+        toast.error('未找到有效数据行')
+        return
+      }
+      
+      // 对每一行数据进行计算，确保派生字段有值
+      const calculatedData = newRows.map(row => calculateRowValues(row))
+      
+      // 更新状态
+      setRows(calculatedData)
+      
+      // 保存到本地存储
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(calculatedData))
+        toast.success(`成功导入 ${calculatedData.length} 行数据`)
+      } catch (saveError) {
+        console.error('保存导入数据失败', saveError)
+        toast.warning('数据导入成功，但保存到本地存储失败')
+      }
+    } catch (error) {
+      console.error('解析CSV数据时发生错误', error)
+      toast.error('解析CSV文件失败')
+    }
+  }
 
   // 当组件挂载时加载数据并执行一次计算
   useEffect(() => {
@@ -781,13 +820,13 @@ const SalesReportTable = () => {
       
       return (
         <MoneyInput
-          ref={(el) => {
+          ref={(el: HTMLInputElement | null) => {
             inputRefs.current[`${row.id}_${column.dataIndex}`] = el
           }}
           value={value || ''}
-          onChange={(value) => handleInputChange(row.id, column.dataIndex, value)}
+          onChange={(value: string) => handleInputChange(row.id, column.dataIndex, value)}
           onBlur={() => calculateRow(row.id)}
-          onKeyDown={(e) => handleKeyDown(e, row.id, colIndex)}
+          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, row.id, colIndex)}
           placeholder="请输入"
           isNegative={isNegative}
         />
@@ -848,12 +887,19 @@ const SalesReportTable = () => {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={handleGenerateMockData}
-              className="h-8 bg-purple-100 hover:bg-purple-200 border-purple-300"
+              onClick={handleImportCSV}
+              className="h-8 bg-blue-100 hover:bg-blue-200 border-blue-300"
             >
-              <Database className="mr-2 h-4 w-4" />
-              生成模拟数据
+              <Upload className="mr-2 h-4 w-4" />
+              导入CSV
             </Button>
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              accept=".csv"
+              className="hidden"
+            />
             <Button 
               variant="outline" 
               size="sm" 
