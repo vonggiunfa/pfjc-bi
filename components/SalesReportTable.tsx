@@ -322,6 +322,34 @@ const SalesReportTable = () => {
   const inputRefs = useRef<{[key: string]: HTMLInputElement | null}>({})
   const [isChartsOpen, setIsChartsOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const tableContainerRef = useRef<HTMLDivElement>(null)
+
+  // 处理表格滚动状态
+  useEffect(() => {
+    const handleScroll = () => {
+      const container = tableContainerRef.current
+      if (!container) return
+      
+      // 判断是否向右滚动（scrollLeft > 0）
+      if (container.scrollLeft > 5) {
+        container.classList.add('scrolled-right')
+      } else {
+        container.classList.remove('scrolled-right')
+      }
+    }
+    
+    const container = tableContainerRef.current
+    if (container) {
+      container.addEventListener('scroll', handleScroll)
+    }
+    
+    // 清理事件监听
+    return () => {
+      if (container) {
+        container.removeEventListener('scroll', handleScroll)
+      }
+    }
+  }, [isClient])
 
   // 处理输入变化
   const handleInputChange = (rowId: string, key: string, value: string) => {
@@ -932,6 +960,7 @@ const SalesReportTable = () => {
               scrollbarColor: 'rgba(156, 163, 175, 0.3) transparent',
               position: 'relative'
             }}
+            ref={tableContainerRef}
           >
             <style jsx global>{`
               /* 自定义滚动条样式 */
@@ -958,8 +987,10 @@ const SalesReportTable = () => {
                 border-collapse: separate;
                 border-spacing: 0;
                 width: 100%;
+                table-layout: fixed;
               }
               
+              /* 固定表头 */
               .sticky-table thead th {
                 position: sticky;
                 top: 0;
@@ -974,8 +1005,54 @@ const SalesReportTable = () => {
                 line-height: 1.25rem;
               }
               
+              /* 固定左侧列 */
+              .sticky-table th.sticky-left,
+              .sticky-table td.sticky-left {
+                position: sticky;
+                left: 0;
+                z-index: 5;
+                background-color: white;
+                /* 移除勾选列的阴影 */
+              }
+              
+              /* 第二个固定列 (日期列) */
+              .sticky-table th.sticky-left-2,
+              .sticky-table td.sticky-left-2 {
+                position: sticky;
+                left: 40px; /* 第一列的宽度 */
+                z-index: 4;
+                background-color: white;
+              }
+              
+              /* 添加滚动感知的阴影效果 */
+              .table-container.scrolled-right .sticky-table th.sticky-left-2,
+              .table-container.scrolled-right .sticky-table td.sticky-left-2 {
+                box-shadow: 2px 0 5px rgba(0, 0, 0, 0.07);
+              }
+              
+              /* 修复表头日期列下边框问题 - 确保日期列表头下边框在滚动时始终可见 */
+              .sticky-table thead th.sticky-left-2 {
+                box-shadow: inset 0 -1px 0 #e5e7eb;
+              }
+              
+              /* 滚动状态下，保持表头下边框的同时添加右侧阴影 */
+              .table-container.scrolled-right .sticky-table thead th.sticky-left-2 {
+                box-shadow: 2px 0 5px rgba(0, 0, 0, 0.07), inset 0 -1px 0 #e5e7eb;
+              }
+              
+              /* 固定列与固定表头的交叉部分，需要更高的z-index */
+              .sticky-table thead th.sticky-left {
+                z-index: 15;
+              }
+              
+              .sticky-table thead th.sticky-left-2 {
+                z-index: 14;
+              }
+              
+              /* 表格行边框 */
               .sticky-table tbody tr {
                 border-bottom: 1px solid #e5e7eb;
+                position: relative;
               }
               
               .sticky-table tbody tr:last-child {
@@ -984,6 +1061,18 @@ const SalesReportTable = () => {
               
               .sticky-table tbody tr.selected {
                 background-color: rgba(0, 0, 0, 0.05);
+              }
+              
+              /* 当选中行时，依然保持固定列的白色背景（非滚动状态） */
+              .sticky-table tbody tr.selected td.sticky-left,
+              .sticky-table tbody tr.selected td.sticky-left-2 {
+                background-color: rgba(0, 0, 0, 0.05);
+              }
+              
+              /* 确保选中行且滚动时的样式正确 */
+              .table-container.scrolled-right .sticky-table tbody tr.selected td.sticky-left-2 {
+                background-color: rgba(0, 0, 0, 0.05);
+                box-shadow: 2px 0 5px rgba(0, 0, 0, 0.07);
               }
               
               .sticky-table td {
@@ -995,9 +1084,13 @@ const SalesReportTable = () => {
             <table className="sticky-table">
               <thead>
                 <tr>
-                  {columns.map(column => (
+                  {columns.map((column, colIndex) => (
                     <th 
                       key={column.key}
+                      className={
+                        colIndex === 0 ? 'sticky-left' : 
+                        colIndex === 1 ? 'sticky-left-2' : ''
+                      }
                       style={{ 
                         width: column.width,
                         minWidth: column.minWidth,
@@ -1025,8 +1118,12 @@ const SalesReportTable = () => {
                   >
                     {columns.map((column, colIndex) => (
                       <td 
-                        key={`${row.id}_${column.key}`} 
-                        className={column.dataIndex === 'select' ? 'w-10 p-0' : ''}
+                        key={`${row.id}_${column.key}`}
+                        className={`
+                          ${column.dataIndex === 'select' ? 'w-10 p-0' : ''}
+                          ${colIndex === 0 ? 'sticky-left' : ''}
+                          ${colIndex === 1 ? 'sticky-left-2' : ''}
+                        `}
                       >
                         {getCellContent(row, column, rowIndex, colIndex)}
                       </td>
@@ -1067,4 +1164,4 @@ const SalesReportTable = () => {
   )
 }
 
-export default SalesReportTable 
+export default SalesReportTable
