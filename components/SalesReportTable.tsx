@@ -5,7 +5,6 @@ import { Calendar } from "@/components/ui/calendar"
 import {
   Card,
   CardContent,
-  CardFooter,
   CardHeader
 } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -1112,20 +1111,20 @@ const SalesReportTable = () => {
                 height: 8px;
               }
               .custom-scrollbar::-webkit-scrollbar-track {
-                background: rgba(240, 240, 240, 0.5);
+                background: #f0f0f0;
                 border-radius: 10px;
               }
               .custom-scrollbar::-webkit-scrollbar-thumb {
-                background-color: rgba(156, 163, 175, 0.5);
+                background-color: #9ca3af;
                 border-radius: 10px;
                 border: 2px solid transparent;
                 background-clip: content-box;
               }
               .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                background-color: rgba(156, 163, 175, 0.8);
+                background-color: #6b7280;
               }
               
-              /* 修改实现方式：直接使用原生表格样式 */
+              /* 表格基础样式 */
               .sticky-table {
                 border-collapse: separate;
                 border-spacing: 0;
@@ -1138,7 +1137,7 @@ const SalesReportTable = () => {
                 position: sticky;
                 top: 0;
                 z-index: 10;
-                background-color: white;
+                background-color: #ffffff;
                 box-shadow: inset 0 -1px 0 #e5e7eb;
                 font-weight: 500;
                 text-align: center;
@@ -1148,42 +1147,24 @@ const SalesReportTable = () => {
                 line-height: 1.25rem;
               }
               
-              /* 固定左侧列 */
+              /* 固定列 */
               .sticky-table th.sticky-left,
               .sticky-table td.sticky-left {
                 position: sticky;
                 left: 0;
                 z-index: 5;
-                background-color: white;
-                /* 移除勾选列的阴影 */
+                background-color: #ffffff;
               }
               
-              /* 第二个固定列 (日期列) */
               .sticky-table th.sticky-left-2,
               .sticky-table td.sticky-left-2 {
                 position: sticky;
                 left: 40px; /* 第一列的宽度 */
                 z-index: 4;
-                background-color: white;
+                background-color: #ffffff;
               }
               
-              /* 添加滚动感知的阴影效果 */
-              .table-container.scrolled-right .sticky-table th.sticky-left-2,
-              .table-container.scrolled-right .sticky-table td.sticky-left-2 {
-                box-shadow: 2px 0 5px rgba(0, 0, 0, 0.07);
-              }
-              
-              /* 修复表头日期列下边框问题 - 确保日期列表头下边框在滚动时始终可见 */
-              .sticky-table thead th.sticky-left-2 {
-                box-shadow: inset 0 -1px 0 #e5e7eb;
-              }
-              
-              /* 滚动状态下，保持表头下边框的同时添加右侧阴影 */
-              .table-container.scrolled-right .sticky-table thead th.sticky-left-2 {
-                box-shadow: 2px 0 5px rgba(0, 0, 0, 0.07), inset 0 -1px 0 #e5e7eb;
-              }
-              
-              /* 固定列与固定表头的交叉部分，需要更高的z-index */
+              /* 固定列与固定表头的交叉部分 */
               .sticky-table thead th.sticky-left {
                 z-index: 15;
               }
@@ -1192,9 +1173,9 @@ const SalesReportTable = () => {
                 z-index: 14;
               }
               
-              /* 表格行边框 */
+              /* 表格行样式 */
               .sticky-table tbody tr {
-                border-bottom: 1px solid #e5e7eb;
+                border-bottom: 1px solid #f0f0f0;
                 position: relative;
               }
               
@@ -1202,61 +1183,41 @@ const SalesReportTable = () => {
                 border-bottom: none;
               }
               
+              /* 选中行样式 */
               .sticky-table tbody tr.selected {
-                background-color: rgba(0, 0, 0, 0.05);
+                background-color: #f2f2f2;
+                transition: background-color 0.2s ease;
               }
               
-              /* 当选中行时，依然保持固定列的背景色 */
+              /* 固定列选中状态 */
               .sticky-table tbody tr.selected td.sticky-left,
               .sticky-table tbody tr.selected td.sticky-left-2 {
-                background-color: rgba(0, 0, 0, 0.05);
+                background-color: #f2f2f2;
               }
               
-              /* 确保选中行且滚动时的样式正确 */
-              .table-container.scrolled-right .sticky-table tbody tr.selected td.sticky-left-2 {
-                background-color: rgba(0, 0, 0, 0.05);
-                box-shadow: 2px 0 5px rgba(0, 0, 0, 0.07);
-              }
-              
-              /* 修复滚动状态下勾选列背景色问题 */
-              .table-container.scrolled-right .sticky-table td.sticky-left {
-                background-color: white;
-                box-shadow: none; /* 勾选列不需要阴影 */
-              }
-              
-              /* 选中行在滚动状态下勾选列的背景色 */
-              .table-container.scrolled-right .sticky-table tbody tr.selected td.sticky-left {
-                background-color: rgba(0, 0, 0, 0.05);
-              }
-              
+              /* 单元格样式 */
               .sticky-table td {
                 padding: 0.5rem;
               }
               
-              /* 不可编辑行样式 */
+              /* 非选中行样式 */
               .sticky-table tbody tr:not(.selected) td {
-                opacity: 0.8;
-                transition: opacity 0.2s ease;
+                color: #666666;
+                transition: color 0.2s ease;
               }
               
-              /* 可编辑行高亮显示 */
-              .sticky-table tbody tr.selected {
-                background-color: rgba(0, 0, 0, 0.05);
-                transition: background-color 0.2s ease;
-              }
-              
-              /* 滚动时提升性能 */
+              /* 滚动性能优化 */
               .table-container.scrolling * {
                 pointer-events: none;
               }
               
-              /* 行悬浮效果提示可选择 */
+              /* 行悬浮效果 */
               .sticky-table tbody tr:hover {
-                background-color: rgba(0, 0, 0, 0.02);
+                background-color: #f8f8f8;
                 cursor: pointer;
               }
               
-              /* 简化非编辑状态下的单元格样式 */
+              /* 只读单元格样式 */
               .sticky-table .readonly-text {
                 text-align: center;
                 padding: 8px 6px;
@@ -1265,10 +1226,10 @@ const SalesReportTable = () => {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 14px; /* 固定字体大小 */
+                font-size: 14px;
               }
               
-              /* 突出显示高亮列 */
+              /* 高亮列样式 */
               .sticky-table .highlight-text {
                 font-weight: 500;
                 color: #4b5563;
@@ -1280,20 +1241,20 @@ const SalesReportTable = () => {
                 font-weight: 500;
               }
               
-              /* 确保输入框和只读文本的字体大小一致 */
+              /* 输入框样式统一 */
               .sticky-table input,
               .sticky-table button {
                 font-size: 14px !important;
               }
               
-              /* 修复不同状态下字体渲染差异 */
+              /* 字体样式统一 */
               .sticky-table tbody tr.selected td,
               .sticky-table tbody tr:not(.selected) td {
                 font-size: 14px;
                 font-weight: normal;
               }
               
-              /* 修复高亮列在不同状态下的一致性 */
+              /* 高亮列一致性 */
               .sticky-table tbody tr.selected .highlight-text,
               .sticky-table tbody tr:not(.selected) .highlight-text {
                 font-weight: 500;
@@ -1372,9 +1333,9 @@ const SalesReportTable = () => {
         </Collapsible>
       </div>
       
-      <CardFooter className="p-4 pt-0 text-sm text-muted-foreground">
+      {/* <CardFooter className="p-4 pt-0 text-sm text-muted-foreground">
         <div>数据自动保存在本地浏览器中，如需长期保存请点击"保存"按钮。实收营业额为负数时会显示红色背景。</div>
-      </CardFooter>
+      </CardFooter> */}
     </Card>
   )
 }
