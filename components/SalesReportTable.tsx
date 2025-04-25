@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format, parse } from "date-fns"
-import { BarChart, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, Plus, Trash2, Upload } from "lucide-react"
+import { BarChart, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, HelpCircle, Plus, Trash2, Upload } from "lucide-react"
 import React, { ChangeEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import MoneyInput, { divide, formatMoney, isNegativeValue, subtract, sum } from "./MoneyInput"
@@ -299,6 +299,7 @@ const SalesReportTable = () => {
   const [isChartsOpen, setIsChartsOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const tableContainerRef = useRef<HTMLDivElement>(null)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
   
   // 使用useCallback优化事件处理函数
   
@@ -1296,8 +1297,84 @@ const SalesReportTable = () => {
         </div>
       )}
       
-      <CardFooter className="p-4 pt-0 text-sm text-muted-foreground">
-        <div>* 每次访问先执行导入表数据，再进行相关操作，完成后导出表到本地进行保存</div>
+      <CardFooter className="p-4 pt-0 text-sm text-muted-foreground flex flex-col items-start gap-2">
+        <Collapsible
+          open={isHelpOpen}
+          onOpenChange={setIsHelpOpen}
+          className="w-full border rounded-md mt-2"
+        >
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="flex items-center justify-between w-full p-2 h-auto">
+              <div className="flex items-center">
+                <HelpCircle className="h-4 w-4 mr-2" />
+                <span className="font-medium text-sm">使用说明</span>
+              </div>
+              {isHelpOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="p-4 text-sm">
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-medium mb-2 text-base">销售数据表格使用指南</h3>
+                <p className="mb-2">这是一个专为记录和分析销售数据设计的工具。以下是详细的操作指南：</p>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm mb-1">基本操作</h4>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>点击<strong>「新增」</strong>按钮添加新的数据行</li>
+                  <li>勾选行前的复选框可<strong>选中行</strong>进行批量操作</li>
+                  <li>表头的复选框可以<strong>全选/取消全选</strong>所有行</li>
+                  <li>选中行后，点击<strong>「删除」</strong>按钮可删除选中的行</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm mb-1">数据输入</h4>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li><strong>必须先选中行</strong>才能编辑数据</li>
+                  <li>点击<strong>日期</strong>单元格可选择日期</li>
+                  <li>输入<strong>微信、支付宝、现金、美团、抖音、外卖</strong>等收入金额</li>
+                  <li>输入<strong>人数</strong>，系统会自动计算人均消费</li>
+                  <li>输入<strong>蔬菜、冻品、干货</strong>等采购成本</li>
+                  <li><strong>总营业额、实收营业额、人均</strong>等字段会自动计算</li>
+                  <li>使用Tab键或Enter键可在各输入框之间快速切换</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm mb-1">数据导入导出</h4>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>点击<strong>「导入CSV」</strong>按钮从本地导入之前保存的数据</li>
+                  <li>点击<strong>「导出全部」</strong>按钮将所有数据导出为CSV文件保存到本地</li>
+                  <li>选中部分行后，导出按钮变为<strong>「导出所选」</strong>，只导出选中的行</li>
+                  <li>每次操作后建议及时<strong>导出数据</strong>到本地保存，防止数据丢失</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm mb-1">数据分析</h4>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>点击<strong>「数据分析图表」</strong>展开统计图表</li>
+                  <li>图表可以显示<strong>全部数据</strong>或仅显示<strong>选中数据</strong></li>
+                  <li>选中特定行后，图表会自动切换到<strong>「选中数据」</strong>模式</li>
+                  <li>取消所有选择后，图表会自动切换回<strong>「全部数据」</strong>模式</li>
+                  <li>图表包含<strong>营业额趋势、支付方式占比、采购成本占比、日收入分析</strong>等多种分析视图</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-sm mb-1">常见问题</h4>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li><strong>无法编辑数据？</strong> - 确保先选中(勾选)要编辑的行</li>
+                  <li><strong>导入CSV失败？</strong> - 确保CSV格式正确，最好使用本系统导出的CSV文件</li>
+                  <li><strong>数据计算错误？</strong> - 检查输入的金额格式是否正确</li>
+                  <li><strong>图表未显示？</strong> - 可能是没有足够的有效数据，请先录入完整数据</li>
+                </ul>
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </CardFooter>
     </Card>
   )
