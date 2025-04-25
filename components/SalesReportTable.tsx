@@ -1217,6 +1217,24 @@ const SalesReportTable = () => {
                 cursor: pointer;
               }
               
+              /* 选中行悬浮效果 */
+              .sticky-table tbody tr.selected:hover {
+                background-color: #eaeaea;
+                cursor: pointer;
+              }
+              
+              /* 悬浮时固定列背景色也随之变化 */
+              .sticky-table tbody tr:hover td.sticky-left,
+              .sticky-table tbody tr:hover td.sticky-left-2 {
+                background-color: #f8f8f8;
+              }
+              
+              /* 选中行悬浮时固定列的背景色 */
+              .sticky-table tbody tr.selected:hover td.sticky-left,
+              .sticky-table tbody tr.selected:hover td.sticky-left-2 {
+                background-color: #eaeaea; /* 与选中行悬浮背景色一致 */
+              }
+              
               /* 只读单元格样式 */
               .sticky-table .readonly-text {
                 text-align: center;
