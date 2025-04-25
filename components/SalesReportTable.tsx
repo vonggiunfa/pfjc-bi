@@ -5,6 +5,7 @@ import { Calendar } from "@/components/ui/calendar"
 import {
   Card,
   CardContent,
+  CardFooter,
   CardHeader
 } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -289,7 +290,7 @@ const TableRow = React.memo(({
  * 5. 计算优化 - 只对选中行进行计算，减少不必要的计算
  */
 const SalesReportTable = () => {
-  const [rows, setRows] = useState<ReportData[]>([createInitialRow()])
+  const [rows, setRows] = useState<ReportData[]>([])
   const [isClient, setIsClient] = useState(false)
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [selectAll, setSelectAll] = useState(false)
@@ -477,17 +478,13 @@ const SalesReportTable = () => {
       toast.error('请先选择要删除的行');
       return;
     }
-
-    if (rows.length <= selectedRows.size) {
-      toast.error('至少保留一行数据');
-      return;
-    }
     
+    // 移除"至少保留一行数据"的限制
     setRows(prevRows => prevRows.filter(row => !selectedRows.has(row.id)));
     setSelectedRows(new Set()); // 清空选择
     setSelectAll(false);
     toast.success(`已删除 ${selectedRows.size} 行数据`);
-  }, [rows.length, selectedRows]);
+  }, [selectedRows]);
 
   // 导出CSV文件 - 选中行或全部
   const exportCSV = useCallback(() => {
@@ -636,7 +633,7 @@ const SalesReportTable = () => {
       }
       
       // 确认是否要替换现有数据
-      if (rows.length > 1 || (rows.length === 1 && (rows[0].total || rows[0].wechat))) {
+      if (rows.length > 0) {  // 只有当已有数据时才询问是否替换
         if (!window.confirm('这将替换当前所有数据，确定要继续吗？')) {
           return;
         }
@@ -714,7 +711,7 @@ const SalesReportTable = () => {
       console.error('解析CSV数据时发生错误', error);
       toast.error('解析CSV文件失败');
     }
-  }, [rows, columns, calculateRowValues]);
+  }, [rows.length, columns, calculateRowValues]);
 
   // 获取单元格内容 - 根据选中状态决定是否可编辑
   const getCellContent = useCallback((row: ReportData, column: ColumnType, rowIndex: number, colIndex: number, isEditable: boolean) => {
@@ -874,8 +871,7 @@ const SalesReportTable = () => {
   // 当组件挂载时初始化
   useEffect(() => {
     setIsClient(true)
-    // 初始化一个空行
-    setRows([createInitialRow()])
+    // 不再初始化默认行
     // 不默认选中任何行
   }, [])
 
@@ -908,6 +904,7 @@ const SalesReportTable = () => {
   const selectedCount = selectedRows.size
   const totalCount = rows.length
   const hasSelected = selectedCount > 0
+  const hasData = rows.length > 0
 
   return (
     <Card>
@@ -927,7 +924,7 @@ const SalesReportTable = () => {
               variant="outline" 
               size="sm" 
               onClick={deleteSelectedRows}
-              className="h-8"
+              className="h-8 text-red-500 hover:text-red-700 border-red-300 hover:border-red-500 hover:bg-red-50"
               disabled={!hasSelected}
             >
               <Trash2 className="mr-2 h-4 w-4" />
@@ -955,10 +952,11 @@ const SalesReportTable = () => {
               className="hidden"
             />
             <Button 
-              variant="outline" 
+              variant="default" 
               size="sm" 
               onClick={exportCSV}
-              className="h-8"
+              className="h-8 bg-black hover:bg-gray-800 text-white"
+              disabled={!hasData}
             >
               <Download className="mr-2 h-4 w-4" />
               {hasSelected ? '导出所选' : '导出全部'}
@@ -968,267 +966,276 @@ const SalesReportTable = () => {
       </CardHeader>
 
       <CardContent className="p-4">
-        <div className="w-full relative" style={{ minWidth: "100%" }}>
-          <div 
-            className="overflow-auto border rounded-md custom-scrollbar table-container"
-            style={{
-              maxHeight: '50vh',
-              scrollbarWidth: 'thin',
-              scrollbarColor: 'rgba(156, 163, 175, 0.3) transparent',
-              position: 'relative'
-            }}
-            ref={tableContainerRef}
-          >
-            <style jsx global>{`
-              /* 自定义滚动条样式 */
-              .custom-scrollbar::-webkit-scrollbar {
-                width: 8px;
-                height: 8px;
-              }
-              .custom-scrollbar::-webkit-scrollbar-track {
-                background: #f0f0f0;
-                border-radius: 10px;
-              }
-              .custom-scrollbar::-webkit-scrollbar-thumb {
-                background-color: #9ca3af;
-                border-radius: 10px;
-                border: 2px solid transparent;
-                background-clip: content-box;
-              }
-              .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                background-color: #6b7280;
-              }
-              
-              /* 表格基础样式 */
-              .sticky-table {
-                border-collapse: separate;
-                border-spacing: 0;
-                width: 100%;
-                table-layout: fixed;
-              }
-              
-              /* 固定表头 */
-              .sticky-table thead th {
-                position: sticky;
-                top: 0;
-                z-index: 10;
-                background-color: #ffffff;
-                box-shadow: inset 0 -1px 0 #e5e7eb;
-                font-weight: 500;
-                text-align: center;
-                color: #6b7280;
-                padding: 0.75rem;
-                font-size: 0.875rem;
-                line-height: 1.25rem;
-              }
-              
-              /* 固定列 */
-              .sticky-table th.sticky-left,
-              .sticky-table td.sticky-left {
-                position: sticky;
-                left: 0;
-                z-index: 5;
-                background-color: #ffffff;
-              }
-              
-              .sticky-table th.sticky-left-2,
-              .sticky-table td.sticky-left-2 {
-                position: sticky;
-                left: 40px; /* 第一列的宽度 */
-                z-index: 4;
-                background-color: #ffffff;
-              }
-              
-              /* 固定列与固定表头的交叉部分 */
-              .sticky-table thead th.sticky-left {
-                z-index: 15;
-              }
-              
-              .sticky-table thead th.sticky-left-2 {
-                z-index: 14;
-              }
-              
-              /* 表格行样式 */
-              .sticky-table tbody tr {
-                border-bottom: 1px solid #f0f0f0;
-                position: relative;
-              }
-              
-              .sticky-table tbody tr:last-child {
-                border-bottom: none;
-              }
-              
-              /* 选中行样式 */
-              .sticky-table tbody tr.selected {
-                background-color: #f2f2f2;
-                transition: background-color 0.2s ease;
-              }
-              
-              /* 固定列选中状态 */
-              .sticky-table tbody tr.selected td.sticky-left,
-              .sticky-table tbody tr.selected td.sticky-left-2 {
-                background-color: #f2f2f2;
-              }
-              
-              /* 单元格样式 */
-              .sticky-table td {
-                padding: 0.5rem;
-              }
-              
-              /* 非选中行样式 */
-              .sticky-table tbody tr:not(.selected) td {
-                color: #666666;
-                transition: color 0.2s ease;
-              }
-              
-              /* 滚动性能优化 */
-              .table-container.scrolling * {
-                pointer-events: none;
-              }
-              
-              /* 行悬浮效果 */
-              .sticky-table tbody tr:hover {
-                background-color: #f8f8f8;
-                cursor: pointer;
-              }
-              
-              /* 选中行悬浮效果 */
-              .sticky-table tbody tr.selected:hover {
-                background-color: #eaeaea;
-                cursor: pointer;
-              }
-              
-              /* 悬浮时固定列背景色也随之变化 */
-              .sticky-table tbody tr:hover td.sticky-left,
-              .sticky-table tbody tr:hover td.sticky-left-2 {
-                background-color: #f8f8f8;
-              }
-              
-              /* 选中行悬浮时固定列的背景色 */
-              .sticky-table tbody tr.selected:hover td.sticky-left,
-              .sticky-table tbody tr.selected:hover td.sticky-left-2 {
-                background-color: #eaeaea; /* 与选中行悬浮背景色一致 */
-              }
-              
-              /* 只读单元格样式 */
-              .sticky-table .readonly-text {
-                text-align: center;
-                padding: 8px 6px;
-                line-height: 1.25;
-                min-height: 40px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 14px;
-              }
-              
-              /* 高亮列样式 */
-              .sticky-table .highlight-text {
-                font-weight: 500;
-                color: #4b5563;
-              }
-              
-              /* 负值样式 */
-              .sticky-table .negative-text {
-                color: #dc2626;
-                font-weight: 500;
-              }
-              
-              /* 输入框样式统一 */
-              .sticky-table input,
-              .sticky-table button {
-                font-size: 14px !important;
-              }
-              
-              /* 字体样式统一 */
-              .sticky-table tbody tr.selected td,
-              .sticky-table tbody tr:not(.selected) td {
-                font-size: 14px;
-                font-weight: normal;
-              }
-              
-              /* 高亮列一致性 */
-              .sticky-table tbody tr.selected .highlight-text,
-              .sticky-table tbody tr:not(.selected) .highlight-text {
-                font-weight: 500;
-              }
-            `}</style>
-            
-            {/* 使用原生表格替代shadcn的Table组件 */}
-            <table className="sticky-table">
-              <thead>
-                <tr>
-                  {columns.map((column, colIndex) => (
-                    <th 
-                      key={column.key}
-                      className={
-                        colIndex === 0 ? 'sticky-left' : 
-                        colIndex === 1 ? 'sticky-left-2' : ''
-                      }
-                      style={{ 
-                        width: column.width,
-                        minWidth: column.minWidth,
-                      }}
-                    >
-                      {column.dataIndex === 'select' ? (
-                        <div className="flex justify-center items-center w-full h-full">
-                          <Checkbox 
-                            checked={selectAll} 
-                            onCheckedChange={handleSelectAll}
-                          />
-                        </div>
-                      ) : (
-                        column.title
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    row={row}
-                    columns={columns}
-                    isSelected={selectedRows.has(row.id)}
-                    onRowSelect={handleRowSelect}
-                    onInputChange={handleInputChange}
-                    onDateChange={handleDateChange}
-                    onBlur={calculateRow}
-                    onKeyDown={handleKeyDown}
-                    getCellContent={getCellContent}
-                  />
-                ))}
-              </tbody>
-            </table>
+        {!hasData ? (
+          <div className="flex flex-col items-center justify-center p-12 border rounded-md bg-gray-50">
+            <div className="text-lg font-medium text-gray-500 mb-2">暂无数据</div>
+            <div className="text-sm text-gray-400">请点击上方"新增"按钮添加数据</div>
           </div>
-        </div>
+        ) : (
+          <div className="w-full relative" style={{ minWidth: "100%" }}>
+            <div 
+              className="overflow-auto border rounded-md custom-scrollbar table-container"
+              style={{
+                maxHeight: '50vh',
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'rgba(156, 163, 175, 0.3) transparent',
+                position: 'relative'
+              }}
+              ref={tableContainerRef}
+            >
+              <style jsx global>{`
+                /* 自定义滚动条样式 */
+                .custom-scrollbar::-webkit-scrollbar {
+                  width: 8px;
+                  height: 8px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                  background: #f0f0f0;
+                  border-radius: 10px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                  background-color: #9ca3af;
+                  border-radius: 10px;
+                  border: 2px solid transparent;
+                  background-clip: content-box;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                  background-color: #6b7280;
+                }
+                
+                /* 表格基础样式 */
+                .sticky-table {
+                  border-collapse: separate;
+                  border-spacing: 0;
+                  width: 100%;
+                  table-layout: fixed;
+                }
+                
+                /* 固定表头 */
+                .sticky-table thead th {
+                  position: sticky;
+                  top: 0;
+                  z-index: 10;
+                  background-color: #ffffff;
+                  box-shadow: inset 0 -1px 0 #e5e7eb;
+                  font-weight: 500;
+                  text-align: center;
+                  color: #6b7280;
+                  padding: 0.75rem;
+                  font-size: 0.875rem;
+                  line-height: 1.25rem;
+                }
+                
+                /* 固定列 */
+                .sticky-table th.sticky-left,
+                .sticky-table td.sticky-left {
+                  position: sticky;
+                  left: 0;
+                  z-index: 5;
+                  background-color: #ffffff;
+                }
+                
+                .sticky-table th.sticky-left-2,
+                .sticky-table td.sticky-left-2 {
+                  position: sticky;
+                  left: 40px; /* 第一列的宽度 */
+                  z-index: 4;
+                  background-color: #ffffff;
+                }
+                
+                /* 固定列与固定表头的交叉部分 */
+                .sticky-table thead th.sticky-left {
+                  z-index: 15;
+                }
+                
+                .sticky-table thead th.sticky-left-2 {
+                  z-index: 14;
+                }
+                
+                /* 表格行样式 */
+                .sticky-table tbody tr {
+                  border-bottom: 1px solid #f0f0f0;
+                  position: relative;
+                }
+                
+                .sticky-table tbody tr:last-child {
+                  border-bottom: none;
+                }
+                
+                /* 选中行样式 */
+                .sticky-table tbody tr.selected {
+                  background-color: #f2f2f2;
+                  transition: background-color 0.2s ease;
+                }
+                
+                /* 固定列选中状态 */
+                .sticky-table tbody tr.selected td.sticky-left,
+                .sticky-table tbody tr.selected td.sticky-left-2 {
+                  background-color: #f2f2f2;
+                }
+                
+                /* 单元格样式 */
+                .sticky-table td {
+                  padding: 0.5rem;
+                }
+                
+                /* 非选中行样式 */
+                .sticky-table tbody tr:not(.selected) td {
+                  color: #666666;
+                  transition: color 0.2s ease;
+                }
+                
+                /* 滚动性能优化 */
+                .table-container.scrolling * {
+                  pointer-events: none;
+                }
+                
+                /* 行悬浮效果 */
+                .sticky-table tbody tr:hover {
+                  background-color: #f8f8f8;
+                  cursor: pointer;
+                }
+                
+                /* 选中行悬浮效果 */
+                .sticky-table tbody tr.selected:hover {
+                  background-color: #eaeaea;
+                  cursor: pointer;
+                }
+                
+                /* 悬浮时固定列背景色也随之变化 */
+                .sticky-table tbody tr:hover td.sticky-left,
+                .sticky-table tbody tr:hover td.sticky-left-2 {
+                  background-color: #f8f8f8;
+                }
+                
+                /* 选中行悬浮时固定列的背景色 */
+                .sticky-table tbody tr.selected:hover td.sticky-left,
+                .sticky-table tbody tr.selected:hover td.sticky-left-2 {
+                  background-color: #eaeaea; /* 与选中行悬浮背景色一致 */
+                }
+                
+                /* 只读单元格样式 */
+                .sticky-table .readonly-text {
+                  text-align: center;
+                  padding: 8px 6px;
+                  line-height: 1.25;
+                  min-height: 40px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-size: 14px;
+                }
+                
+                /* 高亮列样式 */
+                .sticky-table .highlight-text {
+                  font-weight: 500;
+                  color: #4b5563;
+                }
+                
+                /* 负值样式 */
+                .sticky-table .negative-text {
+                  color: #dc2626;
+                  font-weight: 500;
+                }
+                
+                /* 输入框样式统一 */
+                .sticky-table input,
+                .sticky-table button {
+                  font-size: 14px !important;
+                }
+                
+                /* 字体样式统一 */
+                .sticky-table tbody tr.selected td,
+                .sticky-table tbody tr:not(.selected) td {
+                  font-size: 14px;
+                  font-weight: normal;
+                }
+                
+                /* 高亮列一致性 */
+                .sticky-table tbody tr.selected .highlight-text,
+                .sticky-table tbody tr:not(.selected) .highlight-text {
+                  font-weight: 500;
+                }
+              `}</style>
+              
+              {/* 使用原生表格替代shadcn的Table组件 */}
+              <table className="sticky-table">
+                <thead>
+                  <tr>
+                    {columns.map((column, colIndex) => (
+                      <th 
+                        key={column.key}
+                        className={
+                          colIndex === 0 ? 'sticky-left' : 
+                          colIndex === 1 ? 'sticky-left-2' : ''
+                        }
+                        style={{ 
+                          width: column.width,
+                          minWidth: column.minWidth,
+                        }}
+                      >
+                        {column.dataIndex === 'select' ? (
+                          <div className="flex justify-center items-center w-full h-full">
+                            <Checkbox 
+                              checked={selectAll} 
+                              onCheckedChange={handleSelectAll}
+                            />
+                          </div>
+                        ) : (
+                          column.title
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      row={row}
+                      columns={columns}
+                      isSelected={selectedRows.has(row.id)}
+                      onRowSelect={handleRowSelect}
+                      onInputChange={handleInputChange}
+                      onDateChange={handleDateChange}
+                      onBlur={calculateRow}
+                      onKeyDown={handleKeyDown}
+                      getCellContent={getCellContent}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </CardContent>
 
-      <div className="px-4 pt-2 pb-4">
-        <Collapsible
-          open={isChartsOpen}
-          onOpenChange={setIsChartsOpen}
-          className="w-full border rounded-md"
-        >
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" className="flex items-center justify-between w-full p-4">
-              <div className="flex items-center">
-                <BarChart className="h-5 w-5 mr-2" />
-                <span className="font-medium">数据分析图表</span>
-              </div>
-              {isChartsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="p-4">
-            <SalesCharts rows={rows} />
-          </CollapsibleContent>
-        </Collapsible>
-      </div>
+      {hasData && (
+        <div className="px-4 pt-2 pb-4">
+          <Collapsible
+            open={isChartsOpen}
+            onOpenChange={setIsChartsOpen}
+            className="w-full border rounded-md"
+          >
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="flex items-center justify-between w-full p-4">
+                <div className="flex items-center">
+                  <BarChart className="h-5 w-5 mr-2" />
+                  <span className="font-medium">数据分析图表</span>
+                </div>
+                {isChartsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="p-4">
+              <SalesCharts rows={rows} />
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      )}
       
-      {/* <CardFooter className="p-4 pt-0 text-sm text-muted-foreground">
-        <div>数据自动保存在本地浏览器中，如需长期保存请点击"保存"按钮。实收营业额为负数时会显示红色背景。</div>
-      </CardFooter> */}
+      <CardFooter className="p-4 pt-0 text-sm text-muted-foreground">
+        <div>* 每次访问先执行导入表数据，再进行相关操作，完成后建议导出表到本地进行保存</div>
+      </CardFooter>
     </Card>
   )
 }
