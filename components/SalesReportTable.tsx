@@ -294,6 +294,7 @@ const SalesReportTable = () => {
   const [isClient, setIsClient] = useState(false)
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [selectAll, setSelectAll] = useState(false)
+  const [chartDataMode, setChartDataMode] = useState<'all' | 'selected'>('all')
   const inputRefs = useRef<{[key: string]: HTMLInputElement | null}>({})
   const [isChartsOpen, setIsChartsOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -431,12 +432,20 @@ const SalesReportTable = () => {
       const newSelected = new Set(prev);
       if (checked) {
         newSelected.add(rowId);
+        // 当选择第一个行项目时，自动切换到选中数据模式
+        if (newSelected.size === 1 && chartDataMode === 'all') {
+          setChartDataMode('selected');
+        }
       } else {
         newSelected.delete(rowId);
+        // 当取消所有选择时，自动切换回全部数据模式
+        if (newSelected.size === 0 && chartDataMode === 'selected') {
+          setChartDataMode('all');
+        }
       }
       return newSelected;
     });
-  }, []);
+  }, [chartDataMode]);
 
   // 处理全选
   const handleSelectAll = useCallback((checked: boolean) => {
@@ -445,11 +454,19 @@ const SalesReportTable = () => {
       // 全选
       const allIds = rows.map(row => row.id);
       setSelectedRows(new Set(allIds));
+      // 自动切换到选中数据模式（如果有数据）
+      if (rows.length > 0 && chartDataMode === 'all') {
+        setChartDataMode('selected');
+      }
     } else {
       // 取消全选
       setSelectedRows(new Set());
+      // 自动切换回全部数据模式
+      if (chartDataMode === 'selected') {
+        setChartDataMode('all');
+      }
     }
-  }, [rows]);
+  }, [rows, chartDataMode]);
 
   // 添加新行
   const addRow = useCallback(() => {
@@ -899,6 +916,14 @@ const SalesReportTable = () => {
     }
   }, [selectedRows, rows])
 
+  // 获取图表展示的数据
+  const getChartData = useCallback(() => {
+    if (chartDataMode === 'selected' && selectedRows.size > 0) {
+      return rows.filter(row => selectedRows.has(row.id));
+    }
+    return rows;
+  }, [rows, selectedRows, chartDataMode]);
+
   if (!isClient) return null
 
   const selectedCount = selectedRows.size
@@ -1221,20 +1246,58 @@ const SalesReportTable = () => {
               <Button variant="ghost" className="flex items-center justify-between w-full p-4">
                 <div className="flex items-center">
                   <BarChart className="h-5 w-5 mr-2" />
-                  <span className="font-medium">数据分析图表</span>
+                  <span className="font-medium">
+                    数据分析图表 
+                    {chartDataMode === 'selected' && hasSelected ? 
+                      selectedCount === totalCount ? 
+                        '(已全选)' : 
+                        `(已选择 ${selectedCount}/${totalCount})` 
+                      : '(全部数据)'}
+                  </span>
                 </div>
                 {isChartsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="p-4">
-              <SalesCharts rows={rows} />
+              <div className="mb-4 flex justify-between items-center">
+                <div className="text-sm text-muted-foreground">
+                  {chartDataMode === 'selected' && selectedRows.size === 0 ? 
+                    "提示：未选择数据，显示全部数据" : 
+                    chartDataMode === 'selected' ? 
+                      `正在展示已选择的 ${selectedCount} 条数据` : 
+                      `正在展示全部 ${totalCount} 条数据`}
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    variant={chartDataMode === 'all' ? 'default' : 'outline'}
+                    onClick={() => setChartDataMode('all')}
+                    className={chartDataMode === 'all' ? 'bg-black text-white' : ''}
+                  >
+                    全部数据
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant={chartDataMode === 'selected' ? 'default' : 'outline'}
+                    onClick={() => setChartDataMode('selected')}
+                    className={chartDataMode === 'selected' ? 'bg-blue-600 text-white' : ''}
+                    disabled={!hasSelected}
+                  >
+                    选中数据
+                  </Button>
+                </div>
+              </div>
+              <SalesCharts 
+                rows={getChartData()} 
+                key={`chart-${chartDataMode}-${selectedRows.size}-${chartDataMode === 'selected' && selectedRows.size > 0 ? Array.from(selectedRows).join('-') : 'all'}`}
+              />
             </CollapsibleContent>
           </Collapsible>
         </div>
       )}
       
       <CardFooter className="p-4 pt-0 text-sm text-muted-foreground">
-        <div>* 每次访问先执行导入表数据，再进行相关操作，完成后建议导出表到本地进行保存</div>
+        <div>* 每次访问先执行导入表数据，再进行相关操作，完成后导出表到本地进行保存</div>
       </CardFooter>
     </Card>
   )
