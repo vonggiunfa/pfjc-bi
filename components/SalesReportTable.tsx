@@ -11,15 +11,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format, parse } from "date-fns"
-import { BarChart, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, Plus, Save, Trash2, Upload } from "lucide-react"
+import { BarChart, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, Plus, Trash2, Upload } from "lucide-react"
 import React, { ChangeEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import MoneyInput, { divide, formatMoney, isNegativeValue, subtract, sum } from "./MoneyInput"
 import SalesCharts from "./SalesCharts"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
-
-// 定义本地存储key
-const STORAGE_KEY = "sales-report-data"
 
 // 定义数据类型
 interface ReportData {
@@ -292,90 +289,6 @@ const TableRow = React.memo(({
  * 5. 计算优化 - 只对选中行进行计算，减少不必要的计算
  */
 const SalesReportTable = () => {
-  // 从本地存储加载数据
-  const loadSavedData = (): ReportData[] => {
-    if (typeof window === 'undefined') return [createInitialRow()]
-    
-    try {
-      const savedData = localStorage.getItem(STORAGE_KEY)
-      
-      // 检查是否有保存的数据
-      if (!savedData) {
-        return [createInitialRow()]
-      }
-      
-      // 尝试解析数据
-      let parsedData
-      try {
-        parsedData = JSON.parse(savedData)
-      } catch (parseError) {
-        console.error('JSON解析错误，重置数据', parseError)
-        localStorage.removeItem(STORAGE_KEY)
-        return [createInitialRow()]
-      }
-      
-      // 确保解析出来的是数组
-      if (!Array.isArray(parsedData)) {
-        console.error('存储的数据不是数组，类型是:', typeof parsedData)
-        
-        // 尝试修复数据 - 如果是对象，尝试将其包装为数组
-        if (typeof parsedData === 'object' && parsedData !== null) {
-          try {
-            const keys = Object.keys(parsedData)
-            // 检查对象是否有ReportData的关键属性，如果有则可能是单个记录
-            if (keys.includes('id') && keys.includes('date')) {
-              const fixedData = [parsedData]
-              // 保存修复后的数据
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(fixedData))
-              console.info('成功修复单条数据为数组格式')
-              
-              // 确保返回正确格式的数据
-              return fixedData.map(row => ({
-                ...row,
-                date: row.date ? new Date(row.date) : new Date()
-              }))
-            }
-          } catch (fixError) {
-            console.error('尝试修复数据失败', fixError)
-          }
-        }
-        
-        // 如果无法修复，则重置数据
-        console.error('存储的数据不是数组且无法修复，重置数据')
-        localStorage.removeItem(STORAGE_KEY)
-        return [createInitialRow()]
-      }
-      
-      // 确保数组不为空
-      if (parsedData.length === 0) {
-        return [createInitialRow()]
-      }
-      
-      // 验证每个数据项
-      const validData = parsedData.filter(item => {
-        return item && typeof item === 'object' && 'id' in item && 'date' in item
-      })
-      
-      // 如果所有数据都无效，则返回初始行
-      if (validData.length === 0) {
-        console.error('所有存储的数据都无效，重置数据')
-        localStorage.removeItem(STORAGE_KEY)
-        return [createInitialRow()]
-      }
-      
-      // 转换日期并返回有效数据
-      return validData.map(row => ({
-        ...row,
-        date: row.date ? new Date(row.date) : new Date()
-      }))
-    } catch (error) {
-      // 捕获任何其他错误
-      console.error('加载数据时发生错误', error)
-      localStorage.removeItem(STORAGE_KEY)
-      return [createInitialRow()]
-    }
-  }
-
   const [rows, setRows] = useState<ReportData[]>([createInitialRow()])
   const [isClient, setIsClient] = useState(false)
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
@@ -575,23 +488,6 @@ const SalesReportTable = () => {
     setSelectAll(false);
     toast.success(`已删除 ${selectedRows.size} 行数据`);
   }, [rows.length, selectedRows]);
-
-  // 保存数据到本地存储
-  const saveData = useCallback(() => {
-    try {
-      // 确保数据是合法的数组结构后再保存
-      if (!Array.isArray(rows) || rows.length === 0) {
-        setRows([createInitialRow()]);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify([createInitialRow()]));
-      } else {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
-      }
-      toast.success('数据已保存');
-    } catch (error) {
-      console.error('Error saving data', error);
-      toast.error('保存失败');
-    }
-  }, [rows]);
 
   // 导出CSV文件 - 选中行或全部
   const exportCSV = useCallback(() => {
@@ -813,15 +709,7 @@ const SalesReportTable = () => {
       
       // 更新状态
       setRows(calculatedData);
-      
-      // 保存到本地存储
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(calculatedData));
-        toast.success(`成功导入 ${calculatedData.length} 行数据`);
-      } catch (saveError) {
-        console.error('保存导入数据失败', saveError);
-        toast.warning('数据导入成功，但保存到本地存储失败');
-      }
+      toast.success(`成功导入 ${calculatedData.length} 行数据`);
     } catch (error) {
       console.error('解析CSV数据时发生错误', error);
       toast.error('解析CSV文件失败');
@@ -983,18 +871,14 @@ const SalesReportTable = () => {
     };
   }, [isClient]);
 
-  // 当组件挂载时加载数据并执行一次计算
+  // 当组件挂载时初始化
   useEffect(() => {
     setIsClient(true)
-    const savedData = loadSavedData()
-    setRows(savedData)
-    
-    // 默认第一行选中
-    if (savedData.length > 0) {
-      setSelectedRows(new Set([savedData[0].id]))
-    }
+    // 初始化一个空行
+    setRows([createInitialRow()])
+    // 不默认选中任何行
   }, [])
-  
+
   // 当数据变化时自动计算每一行 - 优化为只计算选中行
   useEffect(() => {
     if (isClient) {
@@ -1078,15 +962,6 @@ const SalesReportTable = () => {
             >
               <Download className="mr-2 h-4 w-4" />
               {hasSelected ? '导出所选' : '导出全部'}
-            </Button>
-            <Button 
-              variant="default" 
-              size="sm" 
-              onClick={saveData}
-              className="h-8"
-            >
-              <Save className="mr-2 h-4 w-4" />
-              保存
             </Button>
           </div>
         </div>
