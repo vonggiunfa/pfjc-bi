@@ -1,4 +1,4 @@
-import ImageToPdf from '@/components/ImageToPdf'
+import FloatingTools from '@/components/FloatingTools'
 import SalesReportTable from '@/components/SalesReportTable'
 import { Toaster } from 'sonner'
 
@@ -16,7 +16,7 @@ export default function Home() {
         <SalesReportTable />
       </div>
 
-      <ImageToPdf />
+      <FloatingTools />
       
       <footer className="mt-8 text-center text-sm text-muted-foreground">
         <p>© {new Date().getFullYear()} 品福均创 - 版权所有</p>
