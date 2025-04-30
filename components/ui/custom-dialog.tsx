@@ -10,11 +10,23 @@ export const CustomDialog = DialogPrimitive.Root
 export const CustomDialogTrigger = DialogPrimitive.Trigger
 export const CustomDialogClose = DialogPrimitive.Close
 
+// 添加自定义 DialogTitle 和相关组件以解决可访问性问题
+export const CustomDialogTitle = DialogPrimitive.Title
+export const CustomDialogDescription = DialogPrimitive.Description
+
+// 可视隐藏组件，用于隐藏内容但保持屏幕阅读器可访问性
+export const VisuallyHidden = ({ children }: { children: React.ReactNode }) => (
+  <span className="sr-only">{children}</span>
+)
+
 // 创建自定义 DialogContent，不包含默认关闭按钮
 export const CustomDialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    hideTitle?: boolean;
+    title?: string;
+  }
+>(({ className, children, hideTitle, title = "Dialog", ...props }, ref) => (
   <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay
       className={cn(
@@ -29,6 +41,11 @@ export const CustomDialogContent = React.forwardRef<
       )}
       {...props}
     >
+      {hideTitle ? (
+        <VisuallyHidden>
+          <CustomDialogTitle>{title}</CustomDialogTitle>
+        </VisuallyHidden>
+      ) : null}
       {children}
     </DialogPrimitive.Content>
   </DialogPrimitive.Portal>

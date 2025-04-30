@@ -1,7 +1,12 @@
 'use client'
 
 import ImageToPdf from '@/components/ImageToPdf'
-import { CustomDialog, CustomDialogContent, CustomDialogTrigger } from '@/components/ui/custom-dialog'
+import {
+  CustomDialog,
+  CustomDialogContent,
+  CustomDialogTitle,
+  CustomDialogTrigger
+} from '@/components/ui/custom-dialog'
 import { cn } from '@/lib/utils'
 import { ImageIcon, Settings2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -67,11 +72,15 @@ export default function FloatingTools() {
                   </span>
                 </button>
               </CustomDialogTrigger>
-              <CustomDialogContent className="max-w-3xl p-0 gap-0 rounded-xl shadow-2xl border-none overflow-hidden">
+              <CustomDialogContent 
+                className="max-w-3xl p-0 gap-0 rounded-xl shadow-2xl border-none overflow-hidden"
+                title="图片转PDF"
+                hideTitle={true}
+              >
                 <div className="flex items-center justify-between p-4 border-b bg-zinc-50">
-                  <h2 className="text-base font-medium text-zinc-900">
+                  <CustomDialogTitle className="text-base font-medium text-zinc-900">
                     图片转PDF
-                  </h2>
+                  </CustomDialogTitle>
                   <button 
                     onClick={() => setIsDialogOpen(false)} 
                     className="text-zinc-500 hover:text-zinc-700 focus:outline-none"
