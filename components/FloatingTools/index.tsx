@@ -4,19 +4,34 @@ import ImageToPdf from '@/components/ImageToPdf'
 import { CustomDialog, CustomDialogContent, CustomDialogTrigger } from '@/components/ui/custom-dialog'
 import { cn } from '@/lib/utils'
 import { ImageIcon, Settings2, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export default function FloatingTools() {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const toolsRef = useRef<HTMLDivElement>(null)
 
   const handleToolClick = () => {
     setIsExpanded(false)
     setIsDialogOpen(true)
   }
 
+  // 处理点击外部区域关闭工具箱
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isExpanded && toolsRef.current && !toolsRef.current.contains(event.target as Node)) {
+        setIsExpanded(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isExpanded])
+
   return (
-    <div className="fixed right-8 bottom-8 z-[10]">
+    <div className="fixed right-8 bottom-8 z-[10]" ref={toolsRef}>
       <div className="relative">
         {/* 工具列表 */}
         <div
