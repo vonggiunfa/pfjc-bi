@@ -1,9 +1,9 @@
 'use client'
 
 import ImageToPdf from '@/components/ImageToPdf'
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
+import { CustomDialog, CustomDialogContent, CustomDialogTrigger } from '@/components/ui/custom-dialog'
 import { cn } from '@/lib/utils'
-import { ImageIcon, Settings2 } from 'lucide-react'
+import { ImageIcon, Settings2, X } from 'lucide-react'
 import { useState } from 'react'
 
 export default function FloatingTools() {
@@ -16,26 +16,80 @@ export default function FloatingTools() {
   }
 
   return (
-    <div className="fixed right-8 top-20 z-[100]">
+    <div className="fixed right-8 bottom-8 z-[10]">
       <div className="relative">
+        {/* 工具列表 */}
+        <div
+          className={cn(
+            'absolute right-0 bottom-16',
+            'overflow-hidden',
+            isExpanded ? 'w-[120px]' : 'w-0'
+          )}
+        >
+          <div 
+            className={cn(
+              'bg-white rounded-2xl',
+              'border border-slate-200/30',
+              'p-1 transition-all duration-300 transform',
+              isExpanded 
+                ? 'translate-x-0 opacity-100 translate-y-0' 
+                : 'translate-x-8 opacity-0 translate-y-4'
+            )}
+          >
+            <CustomDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <CustomDialogTrigger asChild>
+                <button
+                  onClick={handleToolClick}
+                  className={cn(
+                    'flex items-center justify-center gap-2 w-full h-12',
+                    'rounded-xl transition-colors duration-200',
+                    'hover:bg-slate-50'
+                  )}
+                >
+                  <ImageIcon className="w-5 h-5 text-black/80" />
+                  <span className="text-sm font-medium text-black/80">
+                    图片转PDF
+                  </span>
+                </button>
+              </CustomDialogTrigger>
+              <CustomDialogContent className="max-w-3xl p-0 gap-0 rounded-xl shadow-2xl border-none overflow-hidden">
+                <div className="flex items-center justify-between p-4 border-b bg-zinc-50">
+                  <h2 className="text-base font-medium text-zinc-900">
+                    图片转PDF
+                  </h2>
+                  <button 
+                    onClick={() => setIsDialogOpen(false)} 
+                    className="text-zinc-500 hover:text-zinc-700 focus:outline-none"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="p-6 bg-white">
+                  <ImageToPdf />
+                </div>
+              </CustomDialogContent>
+            </CustomDialog>
+          </div>
+        </div>
+
         {/* 主按钮 */}
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className={cn(
             'group flex items-center justify-center',
-            'bg-gradient-to-br from-primary/90 via-primary to-primary/95',
-            'text-primary-foreground transition-all duration-300',
+            'bg-gradient-to-br from-zinc-800/95 via-black to-zinc-900',
+            'text-white transition-all duration-300',
             'hover:scale-105 active:scale-95',
             'rounded-2xl backdrop-blur-sm',
-            'shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)]',
+            'shadow-[0_4px_20px_-4px_rgba(0,0,0,0.2)]',
             isExpanded 
               ? [
                 'w-[120px] h-12 gap-2',
-                'shadow-[0_16px_32px_-16px_rgba(0,0,0,0.2)]',
+                'shadow-[0_16px_32px_-16px_rgba(0,0,0,0.3)]',
               ]
               : [
                 'w-12 h-12 hover:rotate-12',
-                'hover:shadow-[0_8px_24px_-4px_rgba(0,0,0,0.15)]'
+                'hover:shadow-[0_8px_24px_-4px_rgba(0,0,0,0.25)]'
               ]
           )}
         >
@@ -55,47 +109,6 @@ export default function FloatingTools() {
             工具箱
           </span>
         </button>
-
-        {/* 工具列表 */}
-        <div
-          className={cn(
-            'absolute right-0 top-16',
-            'overflow-hidden',
-            isExpanded ? 'w-[120px]' : 'w-0'
-          )}
-        >
-          <div 
-            className={cn(
-              'bg-white rounded-2xl',
-              'border border-slate-200/30',
-              'p-1 transition-all duration-300 transform',
-              isExpanded 
-                ? 'translate-x-0 opacity-100' 
-                : 'translate-x-8 opacity-0'
-            )}
-          >
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <button
-                  onClick={handleToolClick}
-                  className={cn(
-                    'flex items-center justify-center gap-2 w-full h-12',
-                    'rounded-xl transition-colors duration-200',
-                    'hover:bg-slate-50'
-                  )}
-                >
-                  <ImageIcon className="w-5 h-5 text-primary" />
-                  <span className="text-sm font-medium text-slate-600">
-                    图片转PDF
-                  </span>
-                </button>
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl">
-                <ImageToPdf />
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
       </div>
     </div>
   )

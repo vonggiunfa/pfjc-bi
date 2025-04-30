@@ -1,5 +1,6 @@
 'use client'
 
+import { cn } from '@/lib/utils'
 import { FileUp, Loader2, Upload } from 'lucide-react'
 import { PDFDocument } from 'pdf-lib'
 import { useState } from 'react'
@@ -91,18 +92,23 @@ export default function ImageToPdf() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex flex-col items-center gap-6">
-        <div className="w-full max-w-xl">
+    <div className="w-full">
+      <div className="flex flex-col gap-5">
+        <div className="w-full">
           <label 
-            className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
+            className={cn(
+              "flex flex-col items-center justify-center",
+              "w-full h-32 border border-dashed rounded-lg cursor-pointer",
+              "bg-zinc-50 hover:bg-zinc-100 transition-colors duration-200",
+              "border-zinc-300"
+            )}
           >
             <div className="flex flex-col items-center justify-center pt-5 pb-6">
-              <Upload className="w-8 h-8 mb-2 text-gray-500" />
-              <p className="mb-2 text-sm text-gray-500">
-                <span className="font-semibold">点击上传</span>
+              <Upload className="w-7 h-7 mb-2 text-zinc-500" />
+              <p className="mb-1 text-sm text-zinc-700">
+                <span className="font-medium">点击上传图片</span>
               </p>
-              <p className="text-xs text-gray-500">支持 JPG、PNG 格式</p>
+              <p className="text-xs text-zinc-500">支持 JPG、PNG 格式</p>
             </div>
             <input
               type="file"
@@ -116,35 +122,54 @@ export default function ImageToPdf() {
         </div>
 
         {selectedFiles.length > 0 && (
-          <div className="w-full max-w-xl">
-            <h3 className="font-medium mb-2">已选择的图片：</h3>
-            <ul className="space-y-2">
+          <div className="w-full">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-zinc-800">已选择图片</h3>
+              <span className="text-xs text-zinc-500">{selectedFiles.length} 个文件</span>
+            </div>
+            <div className="max-h-40 overflow-y-auto rounded-lg border border-zinc-200 divide-y">
               {selectedFiles.map((file, index) => (
-                <li key={index} className="text-sm text-gray-600">
-                  {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                </li>
+                <div key={index} className="flex items-center p-2.5 text-sm">
+                  <div className="w-8 h-8 flex-shrink-0 bg-zinc-100 rounded-md flex items-center justify-center mr-2">
+                    <FileUp className="w-4 h-4 text-zinc-500" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-zinc-700">{file.name}</p>
+                    <p className="text-xs text-zinc-500">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         )}
 
-        <button
-          onClick={convertToPdf}
-          disabled={isConverting || selectedFiles.length === 0}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isConverting ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>转换中...</span>
-            </>
-          ) : (
-            <>
-              <FileUp className="w-4 h-4" />
-              <span>转换为PDF</span>
-            </>
-          )}
-        </button>
+        <div className="flex justify-end">
+          <button
+            onClick={convertToPdf}
+            disabled={isConverting || selectedFiles.length === 0}
+            className={cn(
+              'inline-flex items-center justify-center gap-1.5',
+              'h-8 px-3 text-xs font-medium',
+              'bg-zinc-900 text-white rounded-md',
+              'hover:bg-zinc-800 transition-colors',
+              'disabled:opacity-50 disabled:pointer-events-none'
+            )}
+          >
+            {isConverting ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>转换中...</span>
+              </>
+            ) : (
+              <>
+                <FileUp className="w-3.5 h-3.5" />
+                <span>转换为PDF</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   )
